@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-from typing import NamedTuple
+# from typing import NamedTuple
 
 
 class Restriction():
@@ -102,26 +102,27 @@ class Restriction():
         return self.bd[year][month][day-1]
 
 
-class TripStop(NamedTuple):
-    stopnr: int
-    ifopt: str
-    stopid: int
-    stopname: str
-    # areaid: int
-    platid: int
-    platname: str
-    time: timedelta  # oder was anderes?
-    dep: bool
-    # geht das besser?
-    different_arrdep: bool = False
+class CourseStop():
+    def __init__(self, stopnr, ifopt, stopid, stopname, platid, platname, time, dep, different_arrdep=False):
+        self.stopnr = stopnr
+        self.ifopt = ifopt
+        self.stopid = stopid
+        self.stopname = stopname
+        # self.areaid = areaid
+        self.platid = platid
+        self.platname = platname
+        self.time = time
+        self.dep = dep
+        # geht das besser?
+        self.different_arrdep = different_arrdep
 
     def __str__(self):
-        return "TripStop " + str(self.stopnr) + " " + ("dep" if self.dep else "arr") + " " \
+        return "CourseStop " + str(self.stopnr) + " " + ("dep" if self.dep else "arr") + " " \
                 + str(self.time) + " " + str(self.stopid) + ":" + str(self.platid) \
                 + " (" + self.stopname + " " + self.platname + ", "+ self.ifopt +")"
 
 
-class Trip():
+class Course():
     # todo: alle "betrieb" zu "timetable" oderso umbenennen
     # todo: sind die erwarteten angaben str, int, ?
     def __init__(self, timetable, line, variant, linedir, stops):
@@ -139,6 +140,22 @@ class Trip():
         self.stopto = stops[-1].stopname
         self.duration = self.endtime - self.time
         # + daytype und restriction hier nochmal angeben
+
+    def __str__(self):
+        return "Course " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
+                + " from " + self.stopfrom + " to " + self.stopto \
+                + " (" + str(self.duration) + ")"
+
+
+class Trip(Course):
+    def __init__(self, timetable, line, variant, linedir, stops, starttime):
+        super().__init__(timetable, line, variant, linedir, stops)
+        self.starttime = starttime
+        self.time += self.starttime
+        self.endtime += self.starttime
+
+        for stop in self.stops:
+            stop.time += starttime
 
     def __str__(self):
         # was ist für time besser? mit:
@@ -211,6 +228,44 @@ def findplat(rec_stopping_points, betrieb, stopid, plat):
     for index, row in rec_stopping_points.query("VERSION == @betrieb & STOP_NR == @stopid & STOPPING_POINT_NR == @plat").iterrows():
         return row["IFOPT"].strip(), row["STOPPING_POINT_SHORTNAME"].strip()
 
+def getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+            zeit = timedelta()
+            zeithin = timedelta()
+            zeitwarte = timedelta()
+            prevwarte = timedelta()
+            stops = []
+            for index, row in lid_course.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant").iterrows():
+                stopid = int(row["STOP_NR"])
+                platid = int(row["STOPPING_POINT_NR"])
+                stopnr = int(row["LINE_CONSEC_NR"])
+                # verschieben
+                linedir = int(row["LINE_DIR_NR"])
+
+                for index, row in lid_travel_time_type.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
+                    zeithin = timedelta(seconds=int(row["TT_REL"]))
+                    zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
+                    break
+                zeit += zeithin
+                stopname = findstop(rec_stop, stopid)
+                ifopt, platname = findplat(rec_stopping_points, betrieb, stopid, platid)
+                if zeitwarte != timedelta():
+                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                            stopname = stopname, platid = platid, platname = platname,
+                                            time = zeit, dep = False, different_arrdep = True))
+                    zeit += zeitwarte
+                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                            stopname = stopname, platid = platid, platname = platname,
+                                            time = zeit, dep = True, different_arrdep = True))
+                else:
+                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                            stopname = stopname, platid = platid, platname = platname,
+                                            time = zeit, dep = False))
+                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                            stopname = stopname, platid = platid, platname = platname,
+                                            time = zeit, dep = True))
+            # stops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
+            return Course(betrieb, line, variant, linedir, stops[1:-1])
+
 
 def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, service_restriction, \
                  rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
@@ -233,46 +288,13 @@ def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, servi
             break
         else:
             limit -= 1
-        # if True:
+
         if dayvalid(Restriction(*restrictioncodes[row["RESTRICTION"].strip()]), day, row["DAY_ATTRIBUTE_NR"]):
             variant = row["STR_LINE_VAR"]
-            linedir = row["LINE_DIR_NR"]
-            startzeit = row["DEPARTURE_TIME"]
-            zeit = timedelta(seconds=startzeit)
-            zeithin = timedelta()
-            zeitwarte = timedelta()
-            prevwarte = timedelta()
+            startzeit = timedelta(seconds=row["DEPARTURE_TIME"])
+            course = getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
+            trips.append(Trip(course.timetable, course.line, course.variant, course.linedir, course.stops, startzeit))
 
-            stops = []
-            for index, row in lid_course.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant").iterrows():
-                stopid = int(row["STOP_NR"])
-                platid = int(row["STOPPING_POINT_NR"])
-                stopnr = int(row["LINE_CONSEC_NR"])
-
-                for index, row in lid_travel_time_type.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
-                    zeithin = timedelta(seconds=int(row["TT_REL"]))
-                    zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
-                    break
-                zeit += zeithin
-                stopname = findstop(rec_stop, stopid)
-                ifopt, platname = findplat(rec_stopping_points, betrieb, stopid, platid)
-                if zeitwarte != timedelta():
-                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                          stopname = stopname, platid = platid, platname = platname,
-                                          time = zeit, dep = False, different_arrdep = True))
-                    zeit += zeitwarte
-                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                          stopname = stopname, platid = platid, platname = platname,
-                                          time = zeit, dep = True, different_arrdep = True))
-                else:
-                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                          stopname = stopname, platid = platid, platname = platname,
-                                          time = zeit, dep = False))
-                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                          stopname = stopname, platid = platid, platname = platname,
-                                          time = zeit, dep = True))
-            # stops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
-            trips.append(Trip(betrieb, line, variant, linedir, stops[1:-1]))
     return trips
 
 
