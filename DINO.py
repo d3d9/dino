@@ -1,7 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import NamedTuple
+
 
 class Restriction():
     def __init__(self, restrictionstr, datefrom, dateuntil):
@@ -100,6 +102,82 @@ class Restriction():
         return self.bd[year][month][day-1]
 
 
+class TripStop(NamedTuple):
+    stopnr: int
+    ifopt: str
+    stopid: int
+    stopname: str
+    # areaid: int
+    platid: int
+    platname: str
+    time: timedelta  # oder was anderes?
+    dep: bool
+    # geht das besser?
+    different_arrdep: bool = False
+
+    def __str__(self):
+        return "TripStop " + str(self.stopnr) + " " + ("dep" if self.dep else "arr") + " " \
+                + str(self.time) + " " + str(self.stopid) + ":" + str(self.platid) \
+                + " (" + self.stopname + " " + self.platname + ", "+ self.ifopt +")"
+
+
+class Trip():
+    # todo: alle "betrieb" zu "timetable" oderso umbenennen
+    # todo: sind die erwarteten angaben str, int, ?
+    def __init__(self, timetable, line, variant, linedir, stops):
+        self.timetable = timetable
+        self.line = line  # interne liniennummer
+        # todo: aufteilen
+        #self.lineid = lineid
+        #self.linename = linename
+        self.variant = variant
+        self.linedir = linedir
+        self.stops = stops
+        self.time = stops[0].time
+        self.endtime = stops[-1].time
+        self.stopfrom = stops[0].stopname
+        self.stopto = stops[-1].stopname
+        self.duration = self.endtime - self.time
+        # + daytype und restriction hier nochmal angeben
+
+    def __str__(self):
+        # was ist für time besser? mit:
+        # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
+        # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
+        return "Trip " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
+                + " at " + str(self.time) + " from " + self.stopfrom + " to " + self.stopto \
+                + " (" + str(self.duration) + ")"
+
+    def triptext(self):
+        text = str(self) + "\n"
+        prevnr = 0
+        for stop in self.stops:
+            if stop.different_arrdep or prevnr != stop.stopnr:
+                text += str(stop.stopnr)+":\t"
+                if stop.different_arrdep:
+                    text += "dep" if stop.dep else "arr"
+                else:
+                    text += "   "
+                text += " "+str(stop.time)+"\t"+stop.stopname+" "+stop.platname+"\n"
+                prevnr = stop.stopnr
+
+        return text
+
+#    def tripgraph(self):
+#        raise NotImplementedError()
+
+    # todo: sind areaids notwendig?
+    # todo: was tun, wenn ein stop mehrmals vorkommt? wie macht man es angenehm nutzbar?
+
+##    def timeforstop(self, stopid, areaid, platid, dep):
+#    def timeforstop(self, stopid, platid, dep):
+#        raise NotImplementedError()
+
+##    def slice(self, stopid1, areaid1, platid1, stopid2, areaid2, platid2):
+#    def slice(self, stopid1, platid1, stopid2, platid2):
+#        raise NotImplementedError()
+
+
 def daysin(month, year):
     days = 31
 
@@ -124,14 +202,79 @@ def dayvalid(r, day, daytype):
 
 
 def findstop(rec_stop, stopid):
-	#todo: beim laden das mit duplicate weg und hier etwas machen
-	return rec_stop.loc[stopid]['STOP_NAME'].strip()
+    #todo: beim laden das mit duplicate weg und hier etwas machen
+    return rec_stop.loc[stopid]['STOP_NAME'].strip()
 
 
 def findplat(rec_stopping_points, betrieb, stopid, plat):
     # verbessern
     for index, row in rec_stopping_points.query("VERSION == @betrieb & STOP_NR == @stopid & STOPPING_POINT_NR == @plat").iterrows():
-        return row["STOPPING_POINT_SHORTNAME"]
+        return row["IFOPT"].strip(), row["STOPPING_POINT_SHORTNAME"].strip()
+
+
+def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, service_restriction, \
+                 rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+    # alles mit service_restriction wo anders hin verschieben?
+    #restrictions = {}
+    restrictioncodes = {}
+    for index, row in service_restriction.query("VERSION == @betrieb").iterrows():
+        #restrictions[row[1].strip()] = row[2].strip()
+        restrictioncodes[row[1].strip()] = (row[7].strip(),str(row[8]),str(row[9]))
+
+    timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
+    querystring = "VERSION == @betrieb & LINE_NR == @line & DEPARTURE_TIME >= @timeseconds"
+    # hoffentlich gibt es keine echte LINE_DIR_NR=0
+    if direction:
+        querystring += " & LINE_DIR_NR == @direction"
+
+    trips = []
+    for index, row in rec_trip.query(querystring).iterrows():
+        if not limit:
+            break
+        else:
+            limit -= 1
+        # if True:
+        if dayvalid(Restriction(*restrictioncodes[row["RESTRICTION"].strip()]), day, row["DAY_ATTRIBUTE_NR"]):
+            variant = row["STR_LINE_VAR"]
+            linedir = row["LINE_DIR_NR"]
+            startzeit = row["DEPARTURE_TIME"]
+            zeit = timedelta(seconds=startzeit)
+            zeithin = timedelta()
+            zeitwarte = timedelta()
+            prevwarte = timedelta()
+
+            stops = []
+            for index, row in lid_course.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant").iterrows():
+                stopid = int(row["STOP_NR"])
+                platid = int(row["STOPPING_POINT_NR"])
+                stopnr = int(row["LINE_CONSEC_NR"])
+
+                for index, row in lid_travel_time_type.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
+                    zeithin = timedelta(seconds=int(row["TT_REL"]))
+                    zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
+                    break
+                zeit += zeithin
+                stopname = findstop(rec_stop, stopid)
+                ifopt, platname = findplat(rec_stopping_points, betrieb, stopid, platid)
+                if zeitwarte != timedelta():
+                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                          stopname = stopname, platid = platid, platname = platname,
+                                          time = zeit, dep = False, different_arrdep = True))
+                    zeit += zeitwarte
+                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                          stopname = stopname, platid = platid, platname = platname,
+                                          time = zeit, dep = True, different_arrdep = True))
+                else:
+                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                          stopname = stopname, platid = platid, platname = platname,
+                                          time = zeit, dep = False))
+                    stops.append(TripStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
+                                          stopname = stopname, platid = platid, platname = platname,
+                                          time = zeit, dep = True))
+            # stops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
+            trips.append(Trip(betrieb, line, variant, linedir, stops[1:-1]))
+    return trips
+
 
 '''
 r = Restriction(restrictionstr="3e7cb9e34f9f3e7c79f3e7cf1f3e7cf967cf9f3a3cf9f3e61c3e7cf973e7cf9e0e7cf9f31e7cf9f327cf9f3c39e3e5ce1f3e7cf9",
