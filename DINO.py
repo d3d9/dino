@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
+from copy import deepcopy
 # from typing import NamedTuple
 
 
@@ -146,26 +147,7 @@ class Course():
                 + " from " + self.stopfrom + " to " + self.stopto \
                 + " (" + str(self.duration) + ")"
 
-
-class Trip(Course):
-    def __init__(self, timetable, line, variant, linedir, stops, starttime):
-        super().__init__(timetable, line, variant, linedir, stops)
-        self.starttime = starttime
-        self.time += self.starttime
-        self.endtime += self.starttime
-
-        for stop in self.stops:
-            stop.time += starttime
-
-    def __str__(self):
-        # was ist für time besser? mit:
-        # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
-        # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
-        return "Trip " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
-                + " at " + str(self.time) + " from " + self.stopfrom + " to " + self.stopto \
-                + " (" + str(self.duration) + ")"
-
-    def triptext(self):
+    def stoptext(self):
         text = str(self) + "\n"
         prevnr = 0
         for stop in self.stops:
@@ -179,6 +161,26 @@ class Trip(Course):
                 prevnr = stop.stopnr
 
         return text
+
+
+class Trip(Course):
+    def __init__(self, timetable, line, variant, linedir, stops, starttime):
+        super().__init__(timetable, line, variant, linedir, stops)
+        self.starttime = starttime
+        self.time += self.starttime
+        self.endtime += self.starttime
+        self.stops = deepcopy(self.stops)
+
+        for stop in self.stops:
+            stop.time += starttime
+
+    def __str__(self):
+        # was ist für time besser? mit:
+        # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
+        # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
+        return "Trip " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
+                + " at " + str(self.time) + " from " + self.stopfrom + " to " + self.stopto \
+                + " (" + str(self.duration) + ")"
 
 #    def tripgraph(self):
 #        raise NotImplementedError()
@@ -282,6 +284,7 @@ def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, servi
     if direction:
         querystring += " & LINE_DIR_NR == @direction"
 
+    courses = {}
     trips = []
     for index, row in rec_trip.query(querystring).iterrows():
         if not limit:
@@ -292,7 +295,14 @@ def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, servi
         if dayvalid(Restriction(*restrictioncodes[row["RESTRICTION"].strip()]), day, row["DAY_ATTRIBUTE_NR"]):
             variant = row["STR_LINE_VAR"]
             startzeit = timedelta(seconds=row["DEPARTURE_TIME"])
-            course = getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
+
+            # temporäre lösung
+            if variant in courses:
+                course = courses[variant]
+            else:
+                course = getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
+                courses[variant] = course
+
             trips.append(Trip(course.timetable, course.line, course.variant, course.linedir, course.stops, startzeit))
 
     return trips

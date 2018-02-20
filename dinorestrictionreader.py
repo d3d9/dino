@@ -28,7 +28,7 @@ if __name__ == "__main__":
     testtime = (12,15,0)
     limit = -1
 
-    print("\n".join([trip.triptext() for trip in getlinetrips(betrieb, line, direction, testdate, testtime, limit, \
+    print("\n".join([trip.stoptext() for trip in getlinetrips(betrieb, line, direction, testdate, testtime, limit, \
     rec_trip, service_restriction, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)]))
 
 
