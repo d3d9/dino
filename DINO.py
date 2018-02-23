@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from pandas import isnull
 from datetime import datetime, timedelta
 from copy import deepcopy
-# from typing import NamedTuple
 
 
 class Restriction():
-    def __init__(self, restrictionstr, datefrom, dateuntil):
+    def __init__(self, restrictionstr, datefrom, dateuntil, text=""):
         self.restrictionstr = restrictionstr
         self.firstday = int(datefrom[6:8])
         self.firstmonth = int(datefrom[4:6])
@@ -16,13 +16,16 @@ class Restriction():
         self.lastday = int(dateuntil[6:8])
         self.lastmonth = int(dateuntil[4:6])
         self.endyear = int(dateuntil[0:4])
+
+        self.text = text
         self.bd = self.booldictcalendar()
 
     def __str__(self):
         return "Restriction " + self.restrictionstr + "\n" \
                 + str(self.firstday).zfill(2) + "." + str(self.firstmonth).zfill(2) \
                 + "." + str(self.startyear) + " - " + str(self.lastday).zfill(2) \
-                + "." + str(self.lastmonth).zfill(2) + "." + str(self.endyear)
+                + "." + str(self.lastmonth).zfill(2) + "." + str(self.endyear) \
+                + (("\nText: " + self.text) if self.text else "")
 
     def strdictcalendar(self):
         currentnumber = 0
@@ -123,15 +126,23 @@ class CourseStop():
                 + " (" + self.stopname + " " + self.platname + ", "+ self.ifopt +")"
 
 
-class Course():
-    # todo: alle "betrieb" zu "timetable" oderso umbenennen
-    # todo: sind die erwarteten angaben str, int, ?
-    def __init__(self, timetable, line, variant, linedir, stops):
+class Line():
+    def __init__(self, timetable, lineid, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
         self.timetable = timetable
-        self.line = line  # interne liniennummer
-        # todo: aufteilen
-        #self.lineid = lineid
-        #self.linename = linename
+        self.lineid = lineid
+        self.linesymbol = findlinesymbol(rec_lin_ber, self.timetable, self.lineid)
+        self.courses = {}
+        getlinecourses(self, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
+
+    def __str__(self):
+        return "Line " + self.linesymbol + " (" + self.timetable + ":" + str(self.lineid) + ")"
+
+# class Variant?
+
+class Course():
+    # todo: sind die erwarteten angaben str, int, ?
+    def __init__(self, line, variant, linedir, stops):
+        self.line = line
         self.variant = variant
         self.linedir = linedir
         self.stops = stops
@@ -143,7 +154,7 @@ class Course():
         # + daytype und restriction hier nochmal angeben
 
     def __str__(self):
-        return "Course " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
+        return "Course " + self.line.timetable + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
                 + " from " + self.stopfrom + " to " + self.stopto \
                 + " (" + str(self.duration) + ")"
 
@@ -164,8 +175,10 @@ class Course():
 
 
 class Trip(Course):
-    def __init__(self, timetable, line, variant, linedir, stops, starttime):
-        super().__init__(timetable, line, variant, linedir, stops)
+    def __init__(self, course, restriction, daytype, starttime):
+        super().__init__(course.line, course.variant, course.linedir, course.stops)
+        self.restriction = restriction
+        self.daytype = daytype
         self.starttime = starttime
         self.time += self.starttime
         self.endtime += self.starttime
@@ -178,9 +191,10 @@ class Trip(Course):
         # was ist für time besser? mit:
         # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
         # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
-        return "Trip " + self.timetable + ":" + self.line + ":" + str(self.linedir) + ":" + str(self.variant) \
+        return "Trip " + self.line.timetable + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
                 + " at " + str(self.time) + " from " + self.stopfrom + " to " + self.stopto \
-                + " (" + str(self.duration) + ")"
+                + " (" + str(self.duration) + "), restriction \"" + self.restriction.text \
+                + "\", daytype " + str(self.daytype)
 
 #    def tripgraph(self):
 #        raise NotImplementedError()
@@ -210,7 +224,6 @@ def daysin(month, year):
     return days
 
 
-# day von 0 - 6
 def daytypevalid(weekday, daytype):
     assert 0 <= weekday <= 6
     return bool(int(bin(daytype)[2:].zfill(7)[weekday]))
@@ -225,31 +238,38 @@ def findstop(rec_stop, stopid):
     return rec_stop.loc[stopid]['STOP_NAME'].strip()
 
 
-def findplat(rec_stopping_points, betrieb, stopid, plat):
+def findplat(rec_stopping_points, timetable, stopid, plat):
     # verbessern
-    for index, row in rec_stopping_points.query("VERSION == @betrieb & STOP_NR == @stopid & STOPPING_POINT_NR == @plat").iterrows():
-        return row["IFOPT"].strip(), row["STOPPING_POINT_SHORTNAME"].strip()
+    for index, row in rec_stopping_points.query("VERSION == @timetable & STOP_NR == @stopid & STOPPING_POINT_NR == @plat").iterrows():
+        return str(row["IFOPT"]).strip(), str(row["STOPPING_POINT_SHORTNAME"]).strip()
 
-def getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+
+def findlinesymbol(rec_lin_ber, timetable, lineid):
+    for index, row in rec_lin_ber.query("VERSION == @timetable & LINE_NR == @lineid").iterrows():
+        return str(row["LINE_NAME"]).strip()
+
+
+def getcourse(line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
             zeit = timedelta()
             zeithin = timedelta()
             zeitwarte = timedelta()
             prevwarte = timedelta()
             stops = []
-            for index, row in lid_course.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant").iterrows():
+
+            for index, row in lid_course.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
                 stopid = int(row["STOP_NR"])
                 platid = int(row["STOPPING_POINT_NR"])
                 stopnr = int(row["LINE_CONSEC_NR"])
                 # verschieben
                 linedir = int(row["LINE_DIR_NR"])
 
-                for index, row in lid_travel_time_type.query("VERSION == @betrieb & LINE_NR == @line & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
+                for index, row in lid_travel_time_type.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
                     zeithin = timedelta(seconds=int(row["TT_REL"]))
                     zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
                     break
                 zeit += zeithin
                 stopname = findstop(rec_stop, stopid)
-                ifopt, platname = findplat(rec_stopping_points, betrieb, stopid, platid)
+                ifopt, platname = findplat(rec_stopping_points, line.timetable, stopid, platid)
                 if zeitwarte != timedelta():
                     stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
                                             stopname = stopname, platid = platid, platname = platname,
@@ -266,25 +286,24 @@ def getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_
                                             stopname = stopname, platid = platid, platname = platname,
                                             time = zeit, dep = True))
             # stops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
-            return Course(betrieb, line, variant, linedir, stops[1:-1])
+            return Course(line, variant, linedir, stops[1:-1])
 
 
-def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, service_restriction, \
+def getlinecourses(line, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+    for index, row in rec_lin_ber.query("VERSION == @line.timetable & LINE_NR == @line.lineid").iterrows():
+        variant = int(row["STR_LINE_VAR"])
+        line.courses[variant] = getcourse(line, variant, rec_stop, lid_course, \
+                                          lid_travel_time_type, rec_stopping_points)
+
+
+def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip, \
                  rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
-    # alles mit service_restriction wo anders hin verschieben?
-    #restrictions = {}
-    restrictioncodes = {}
-    for index, row in service_restriction.query("VERSION == @betrieb").iterrows():
-        #restrictions[row[1].strip()] = row[2].strip()
-        restrictioncodes[row[1].strip()] = (row[7].strip(),str(row[8]),str(row[9]))
-
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
-    querystring = "VERSION == @betrieb & LINE_NR == @line & DEPARTURE_TIME >= @timeseconds"
+    querystring = "VERSION == @line.timetable & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
     # hoffentlich gibt es keine echte LINE_DIR_NR=0
     if direction:
         querystring += " & LINE_DIR_NR == @direction"
 
-    courses = {}
     trips = []
     for index, row in rec_trip.query(querystring).iterrows():
         if not limit:
@@ -292,26 +311,38 @@ def getlinetrips(betrieb, line, direction, day, fromtime, limit, rec_trip, servi
         else:
             limit -= 1
 
-        if dayvalid(Restriction(*restrictioncodes[row["RESTRICTION"].strip()]), day, row["DAY_ATTRIBUTE_NR"]):
-            variant = row["STR_LINE_VAR"]
-            startzeit = timedelta(seconds=row["DEPARTURE_TIME"])
-
-            # temporäre lösung
-            if variant in courses:
-                course = courses[variant]
-            else:
-                course = getlinecourse(betrieb, line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
-                courses[variant] = course
-
-            trips.append(Trip(course.timetable, course.line, course.variant, course.linedir, course.stops, startzeit))
+        restriction = Restriction(*restrictions[row["RESTRICTION"].strip()])
+        daytype = row["DAY_ATTRIBUTE_NR"]
+        if dayvalid(restriction, day, daytype):
+            trips.append(Trip(line.courses[row["STR_LINE_VAR"]], restriction, \
+                              daytype, timedelta(seconds=row["DEPARTURE_TIME"])))
 
     return trips
+
+
+def readrestrictions(service_restriction, timetable):
+    restrictions = {}
+    for index, row in service_restriction.query("VERSION == @timetable").iterrows():
+        text = ""
+        for n in range(1,6):
+            rt = row["RESTRICT_TEXT"+str(n)]
+            if isnull(rt):
+                rt = ""
+            else:
+                rt = rt.strip()
+            text += rt
+
+        restrictions[row["RESTRICTION"].strip()] = (row["RESTRICTION_DAYS"].strip(), \
+                                                    str(row["DATE_FROM"]), str(row["DATE_UNTIL"]), \
+                                                    text)
+    return restrictions
 
 
 '''
 r = Restriction(restrictionstr="3e7cb9e34f9f3e7c79f3e7cf1f3e7cf967cf9f3a3cf9f3e61c3e7cf973e7cf9e0e7cf9f31e7cf9f327cf9f3c39e3e5ce1f3e7cf9",
                 datefrom="20170611",
-                dateuntil="20180617")
+                dateuntil="20180617",
+                text="Mo-Fr ohne Feiertage")
 print(str(r)+"\n")
 print(r.textcalendar(), end='')
 print('')
