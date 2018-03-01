@@ -106,15 +106,80 @@ class Restriction():
         return self.bd[year][month][day-1]
 
 
-class CourseStop():
-    def __init__(self, stopnr, ifopt, stopid, stopname, platid, platname, time, dep, different_arrdep=False):
-        self.stopnr = stopnr
-        self.ifopt = ifopt
+class Stop():
+    def __init__(self, stopid, timetable, stoptype, name, shortname, \
+#                 addname, addname_noloc, \
+                 pos_x, pos_y, placename, placeocc, farezones, ifopt):
         self.stopid = stopid
-        self.stopname = stopname
-        # self.areaid = areaid
-        self.platid = platid
-        self.platname = platname
+        self.timetable = timetable
+        # REF_STOP_NR/NAME ?
+        self.stoptype = stoptype
+        self.name = name
+        self.shortname = shortname
+#        self.addname = addname # ADD_STOP_NAME_WITH_LOCALITY (rec_additional_stopname.din)
+#        self.addname_noloc = addname_noloc # ADD_STOP_NAME_WITHOUT_LOCALITY (rec_additional_stopname.din)
+        self.pos_x = pos_x #
+        self.pos_y = pos_y
+        self.placename = placename
+        self.placeocc = placeocc
+        self.farezones = farezones
+        self.ifopt = ifopt
+        self.areas = {}
+
+    def __str__(self):
+        return "Stop " + str(self.stopid) + ", Name \"" + self.name + "\" (" + self.shortname \
+               +"), IFOPT " + self.ifopt + ", Place \"" + self.placename \
+               + "\" (" + str(self.placeocc) + "), fare zone" + ("s " if len(self.farezones) > 1 else " ") \
+               + ",".join(str(fz) for fz in self.farezones) + ", Location " + self.pos_x + "," + self.pos_y
+
+    def readareas(self, rec_stop_area):
+        for index, row in rec_stop_area.query("VERSION == @self.timetable & STOP_NR == @self.stopid").iterrows():
+            areaid = row["STOP_AREA_NR"]
+            self.areas[areaid] = StopArea(self, areaid, nullorstrip(row["STOP_AREA_NAME"]), nullorstrip(row["IFOPT"]))
+
+
+class StopArea():
+    def __init__(self, stop, areaid, name, ifopt):
+        self.stop = stop
+        self.areaid = areaid
+        self.name = name
+        self.ifopt = ifopt
+        self.positions = {}
+        # self.pos_x, self.pos_y berechnen?
+
+    def __str__(self):
+        return "StopArea " + str(self.stop.stopid) + " " + str(self.areaid) + ", Name \"" + self.name \
+               + "\", IFOPT " + (self.ifopt if self.ifopt else "-")
+
+    def readpoints(self, rec_stopping_points):
+        for index, row in rec_stopping_points.query("VERSION == @self.stop.timetable & STOP_NR == @self.stop.stopid & STOP_AREA_NR == @self.areaid").iterrows():
+            posid = row["STOPPING_POINT_NR"]
+            self.positions[posid] = \
+                StopPosition(self, posid, nullorstrip(row["STOPPING_POINT_POS_X"]), \
+                nullorstrip(row["STOPPING_POINT_POS_Y"]), nullorstrip(row["STOPPING_POINT_SHORTNAME"]), nullorstrip(row["IFOPT"]))
+
+
+class StopPosition():
+    def __init__(self, area, posid, pos_x, pos_y, name, ifopt):
+        self.area = area
+        self.posid = posid
+        self.pos_x = pos_x
+        self.pos_y = pos_y
+        # STOP_RBL_NR ?
+        # PURPOSE* ?
+        self.name = name
+        self.ifopt = ifopt
+
+    def __str__(self):
+        return "StopPosition " + str(self.area.stop.stopid) + " " + str(self.area.areaid) + " " \
+                               + str(self.posid) + ", Name \"" + self.name + "\", IFOPT " \
+                               + (self.ifopt if self.ifopt else "-") + ", Location " + self.pos_x + "," + self.pos_y
+
+
+class CourseStop():
+    def __init__(self, stopnr, stoppos, time, dep, different_arrdep=False):
+        self.stopnr = stopnr
+        self.stoppos = stoppos
         self.time = time
         self.dep = dep
         # geht das besser?
@@ -122,17 +187,17 @@ class CourseStop():
 
     def __str__(self):
         return "CourseStop " + str(self.stopnr) + " " + ("dep" if self.dep else "arr") + " " \
-                + str(self.time) + " " + str(self.stopid) + ":" + str(self.platid) \
-                + " (" + self.stopname + " " + self.platname + ", "+ self.ifopt +")"
+                + str(self.time) + " " + str(self.stoppos.area.stop.stopid) + ":" + str(self.stoppos.posid) \
+                + " (" + self.stoppos.area.stop.name + " " + self.stoppos.name + ", "+ self.stoppos.ifopt +")"
 
 
 class Line():
-    def __init__(self, timetable, lineid, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+    def __init__(self, timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops):
         self.timetable = timetable
         self.lineid = lineid
         self.linesymbol = findlinesymbol(rec_lin_ber, self.timetable, self.lineid)
         self.courses = {}
-        getlinecourses(self, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points)
+        getlinecourses(self, rec_lin_ber, lid_course, lid_travel_time_type, stops)
 
     def __str__(self):
         return "Line " + self.linesymbol + " (" + self.timetable + ":" + str(self.lineid) + ")"
@@ -148,8 +213,8 @@ class Course():
         self.stops = stops
         self.time = stops[0].time
         self.endtime = stops[-1].time
-        self.stopfrom = stops[0].stopname
-        self.stopto = stops[-1].stopname
+        self.stopfrom = stops[0].stoppos.area.stop.name
+        self.stopto = stops[-1].stoppos.area.stop.name
         self.duration = self.endtime - self.time
         # + daytype und restriction hier nochmal angeben
 
@@ -158,31 +223,17 @@ class Course():
                 + " from " + self.stopfrom + " to " + self.stopto \
                 + " (" + str(self.duration) + ")"
 
-    def stoptext(self):
-        text = str(self) + "\n"
-        prevnr = 0
-        for stop in self.stops:
-            if stop.different_arrdep or prevnr != stop.stopnr:
-                text += str(stop.stopnr)+":\t"
-                if stop.different_arrdep:
-                    text += "dep" if stop.dep else "arr"
-                else:
-                    text += "   "
-                text += " "+str(stop.time)+"\t"+stop.stopname+" "+stop.platname+"\n"
-                prevnr = stop.stopnr
 
-        return text
-
-
-class Trip(Course):
+class Trip():
     def __init__(self, course, restriction, daytype, starttime):
-        super().__init__(course.line, course.variant, course.linedir, course.stops)
+        self.course = course
         self.restriction = restriction
+        # NOTICE ?
         self.daytype = daytype
         self.starttime = starttime
-        self.time += self.starttime
-        self.endtime += self.starttime
-        self.stops = deepcopy(self.stops)
+        self.time = course.time + self.starttime
+        self.endtime = course.endtime + self.starttime
+        self.stops = deepcopy(self.course.stops)
 
         for stop in self.stops:
             stop.time += starttime
@@ -191,9 +242,9 @@ class Trip(Course):
         # was ist für time besser? mit:
         # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
         # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
-        return "Trip " + self.line.timetable + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
-                + " at " + str(self.time) + " from " + self.stopfrom + " to " + self.stopto \
-                + " (" + str(self.duration) + "), restriction \"" + self.restriction.text \
+        return "Trip " + self.course.line.timetable + ":" + self.course.line.lineid + ":" + str(self.course.linedir) + ":" + str(self.course.variant) \
+                + " at " + str(self.time) + " from " + self.course.stopfrom + " to " + self.course.stopto \
+                + " (" + str(self.course.duration) + "), restriction \"" + self.restriction.text \
                 + "\", daytype " + str(self.daytype)
 
 #    def tripgraph(self):
@@ -209,6 +260,27 @@ class Trip(Course):
 ##    def slice(self, stopid1, areaid1, platid1, stopid2, areaid2, platid2):
 #    def slice(self, stopid1, platid1, stopid2, platid2):
 #        raise NotImplementedError()
+
+
+# todo: nochmal woanders hin verschieben
+def stoptext(thing):
+    text = str(thing) + "\n"
+    prevnr = 0
+    for stop in thing.stops:
+        if stop.different_arrdep or prevnr != stop.stopnr:
+            text += str(stop.stopnr)+":\t"
+            if stop.different_arrdep:
+                text += "dep" if stop.dep else "arr"
+            else:
+                text += "   "
+            text += " "+str(stop.time)+"\t"+stop.stoppos.area.stop.name+" "+stop.stoppos.name+"\n"
+            prevnr = stop.stopnr
+
+    return text
+
+
+def nullorstrip(inp):
+    return ("" if isnull(inp) else inp.strip())
 
 
 def daysin(month, year):
@@ -233,32 +305,21 @@ def dayvalid(r, day, daytype):
     return daytypevalid(datetime(*day).weekday(), daytype) and r.dayresvalid(*day)
 
 
-def findstop(rec_stop, stopid):
-    #todo: beim laden das mit duplicate weg und hier etwas machen
-    return rec_stop.loc[stopid]['STOP_NAME'].strip()
-
-
-def findplat(rec_stopping_points, timetable, stopid, plat):
-    # verbessern
-    for index, row in rec_stopping_points.query("VERSION == @timetable & STOP_NR == @stopid & STOPPING_POINT_NR == @plat").iterrows():
-        return str(row["IFOPT"]).strip(), str(row["STOPPING_POINT_SHORTNAME"]).strip()
-
-
 def findlinesymbol(rec_lin_ber, timetable, lineid):
     for index, row in rec_lin_ber.query("VERSION == @timetable & LINE_NR == @lineid").iterrows():
         return str(row["LINE_NAME"]).strip()
 
 
-def getcourse(line, variant, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
             zeit = timedelta()
             zeithin = timedelta()
             zeitwarte = timedelta()
             prevwarte = timedelta()
-            stops = []
+            coursestops = []
 
             for index, row in lid_course.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
                 stopid = int(row["STOP_NR"])
-                platid = int(row["STOPPING_POINT_NR"])
+                posid = int(row["STOPPING_POINT_NR"])
                 stopnr = int(row["LINE_CONSEC_NR"])
                 # verschieben
                 linedir = int(row["LINE_DIR_NR"])
@@ -268,36 +329,35 @@ def getcourse(line, variant, rec_stop, lid_course, lid_travel_time_type, rec_sto
                     zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
                     break
                 zeit += zeithin
-                stopname = findstop(rec_stop, stopid)
-                ifopt, platname = findplat(rec_stopping_points, line.timetable, stopid, platid)
+
+                stoppos = None
+                for areaid in stops[stopid].areas:
+                    if posid in stops[stopid].areas[areaid].positions:
+                        stoppos = stops[stopid].areas[areaid].positions[posid]  
+                        break
                 if zeitwarte != timedelta():
-                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                            stopname = stopname, platid = platid, platname = platname,
-                                            time = zeit, dep = False, different_arrdep = True))
+                    coursestops.append(CourseStop(stopnr = stopnr, stoppos = stoppos,
+                                                  time = zeit, dep = False, different_arrdep = True))
                     zeit += zeitwarte
-                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                            stopname = stopname, platid = platid, platname = platname,
-                                            time = zeit, dep = True, different_arrdep = True))
+                    coursestops.append(CourseStop(stopnr = stopnr, stoppos = stoppos,
+                                                  time = zeit, dep = True, different_arrdep = True))
                 else:
-                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                            stopname = stopname, platid = platid, platname = platname,
-                                            time = zeit, dep = False))
-                    stops.append(CourseStop(stopnr = stopnr, ifopt = ifopt, stopid = stopid,
-                                            stopname = stopname, platid = platid, platname = platname,
-                                            time = zeit, dep = True))
-            # stops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
-            return Course(line, variant, linedir, stops[1:-1])
+                    coursestops.append(CourseStop(stopnr = stopnr, stoppos = stoppos,
+                                                  time = zeit, dep = False))
+                    coursestops.append(CourseStop(stopnr = stopnr, stoppos = stoppos,
+                                                  time = zeit, dep = True))
+            # coursestops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
+            return Course(line, variant, linedir, coursestops[1:-1])
 
 
-def getlinecourses(line, rec_lin_ber, rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
     for index, row in rec_lin_ber.query("VERSION == @line.timetable & LINE_NR == @line.lineid").iterrows():
         variant = int(row["STR_LINE_VAR"])
-        line.courses[variant] = getcourse(line, variant, rec_stop, lid_course, \
-                                          lid_travel_time_type, rec_stopping_points)
+        line.courses[variant] = getcourse(line, variant, lid_course, lid_travel_time_type, stops)
 
 
 def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip, \
-                 rec_stop, lid_course, lid_travel_time_type, rec_stopping_points):
+                 lid_course, lid_travel_time_type, stops):
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
     querystring = "VERSION == @line.timetable & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
     # hoffentlich gibt es keine echte LINE_DIR_NR=0
@@ -326,16 +386,51 @@ def readrestrictions(service_restriction, timetable):
         text = ""
         for n in range(1,6):
             rt = row["RESTRICT_TEXT"+str(n)]
-            if isnull(rt):
-                rt = ""
-            else:
-                rt = rt.strip()
+            rt = nullorstrip(rt)
             text += rt
 
         restrictions[row["RESTRICTION"].strip()] = (row["RESTRICTION_DAYS"].strip(), \
                                                     str(row["DATE_FROM"]), str(row["DATE_UNTIL"]), \
                                                     text)
     return restrictions
+
+
+def readallstops(timetable, rec_stop, rec_stop_area, rec_stopping_points):
+    stops = {}
+    for index, row in rec_stop.query("VERSION == @timetable").iterrows():
+        farezones = [int(row["FARE_ZONE"])]
+        for x in range(2,7):
+            farezone = int(row["FARE_ZONE"+str(x)])
+            if farezone != -1:
+                farezones.append(farezone)
+        stops[index] = Stop(index, timetable, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), row["STOP_SHORTNAME"].strip(), \
+                            # addnamerow["ADD_STOP_NAME_WITH_LOCALITY"].strip(), addnamerow["ADD_STOP_NAME_WITHOUT_LOCALITY"].strip(), \
+                            row["STOP_POS_X"].strip(), row["STOP_POS_Y"].strip(), row["PLACE"].strip(), \
+                            row["OCC"], tuple(farezones), row["IFOPT"].strip())
+        stops[index].readareas(rec_stop_area)
+        for areaid in stops[index].areas:
+            stops[index].areas[areaid].readpoints(rec_stopping_points)
+    return stops
+
+
+def printstops(stopdict):
+    stopc = 0
+    areac = 0
+    pointc = 0
+    text = ""
+    for stop in stopdict:
+        stopc += 1
+        text += str(stopdict[stop]) + "\n"
+        for area in stopdict[stop].areas:
+            areac += 1
+            text += "-"+str(stopdict[stop].areas[area]) + "\n"
+            for pos in stopdict[stop].areas[area].positions:
+                pointc += 1
+                text += "--"+str(stopdict[stop].areas[area].positions[pos]) + "\n"
+        text += "\n"
+
+    text += f"Stops: {stopc}\nAreas: {areac}\nPoints: {pointc}"
+    return text
 
 
 '''
