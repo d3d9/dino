@@ -15,8 +15,8 @@ if __name__ == "__main__":
         rec_stop = pandas.read_csv(stopfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'STOP_TYPE_NR':int,'STOP_NAME':str,'STOP_SHORTNAME':str,'STOP_POS_X':str,'STOP_POS_Y':str,'PLACE':str,'OCC':int,'IFOPT':str}, index_col=1)
     with open("./dino/rec_stop_area.din", 'r') as areafile:
         rec_stop_area = pandas.read_csv(areafile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'STOP_AREA_NR':int,'STOP_AREA_NAME':str,'IFOPT':str})
-#    with open("./dino/rec_additional_stopname.din", 'r') as addnamefile:
-#        rec_additional_stopname = pandas.read_csv(addnamefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int, 'STOP_TYPE_NR':int,'ADD_STOP_NAME_WITH_LOCALITY':str,'ADD_STOP_NAME_WITHOUT_LOCALITY':str})
+    #with open("./dino/rec_additional_stopname.din", 'r') as addnamefile:
+    #     rec_additional_stopname = pandas.read_csv(addnamefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int, 'STOP_TYPE_NR':int,'ADD_STOP_NAME_WITH_LOCALITY':str,'ADD_STOP_NAME_WITHOUT_LOCALITY':str})
     with open("./dino/lid_course.din", 'r') as coursefile:
         lid_course = pandas.read_csv(coursefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_CONSEC_NR':int,'STOPPING_POINT_NR':int})
     with open("./dino/lid_travel_time_type.din", 'r') as timefile:
@@ -27,23 +27,44 @@ if __name__ == "__main__":
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
     timetable = "12"
-    lineid = "50514"
+    stops = readallstops(timetable, rec_stop, rec_stop_area, rec_stopping_points)
+
+    # list of stops/areas/positions
+    '''
+    print(printstops(stops))
+    '''
+
+    # line(s) to csv
+    #'''
+    inputlines = input("Linien-IDs kommagetrennt (\"K\" für Komplettexport): ")
+    if inputlines == "K":
+        lines = set(rec_lin_ber.query("VERSION == @timetable").index.values)
+    else:
+        lines = list(map(int, inputlines.split(",")))
+    for lineid in lines:
+        line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+        line.ascsv("csv")
+    #'''
+
+    # course texts for line
+    '''
+    lineid = 50514
+    line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+    print("\n".join([stoptext(course) for course in [line.courses[x] for x in line.courses]]))
+    '''
+
+    # trip texts for line
+    '''
+    lineid = 50514
     direction = 0
     testdate = (2018,2,23)
     testtime = (18,50,0)
     limit = -1
 
-    stops = readallstops(timetable, rec_stop, rec_stop_area, rec_stopping_points)
-    restrictions = readrestrictions(service_restriction, timetable)
-
-    # print(printstops(stops))
-
     line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
-
-    # print("\n".join([stoptext(course) for course in [line.courses[x] for x in line.courses]]))
-
+    restrictions = readrestrictions(service_restriction, timetable)
     print("\n".join([stoptext(trip) for trip in getlinetrips(line, direction, testdate, testtime, limit,
                                                              restrictions, rec_trip, lid_course,
                                                              lid_travel_time_type, stops)]))
-
+    '''
 

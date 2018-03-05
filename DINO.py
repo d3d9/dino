@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 from pandas import isnull
 from datetime import datetime, timedelta
 from copy import deepcopy
+from csv import writer
 
 
 class Restriction():
@@ -194,16 +196,37 @@ class CourseStop():
 class Line():
     def __init__(self, timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops):
         self.timetable = timetable
-        self.lineid = lineid
+        self.lineid = str(lineid)
         self.linesymbol = findlinesymbol(rec_lin_ber, self.timetable, self.lineid)
         self.courses = {}
         getlinecourses(self, rec_lin_ber, lid_course, lid_travel_time_type, stops)
 
     def __str__(self):
-        return "Line " + self.linesymbol + " (" + self.timetable + ":" + str(self.lineid) + ")"
+        return "Line " + self.linesymbol + " (" + self.timetable + ":" + self.lineid + ")"
 
+    def ascsv(self, directory):
+        for courseid in self.courses:
+            course = self.courses[courseid]
+            try:
+                try:
+                    firststop = course.stopfrom.split(" ")[1].replace("/","").replace(".","")
+                except:
+                    firststop = course.stopfrom.replace("/","").replace(".","")
+                try:
+                    laststop = course.stopto.split(" ")[1].replace("/","").replace(".","")
+                except:
+                    laststop = course.stopto.replace("/","").replace(".","")
 
-# class Variant?
+                filename = os.path.join(os.getcwd(), directory, "vrr_"+self.linesymbol+"_"+str(courseid)+"_"+firststop+"_"+laststop+".csv")
+                with open(filename, 'w') as cf:
+                    outwriter = writer(cf, delimiter=";", lineterminator='\n')
+                    outwriter.writerows([(stop.stopnr, stop.stoppos.ifopt,
+                                          stop.stoppos.area.stop.name,
+                                          int(stop.time.total_seconds())) \
+                                         for stop in singlestops(course)])
+                print(f"route file \"{filename}\" written")
+            except Exception as e:
+                print(f"error writing route file: {e}")
 
 
 class Course():
@@ -281,6 +304,14 @@ def stoptext(thing):
     return text
 
 
+def singlestops(thing):
+    stops = []
+    for si, stop in enumerate(thing.stops):
+        if (not si) or (si == (len(thing.stops) - 1)) or stop.dep:
+            stops.append(stop)
+    return stops
+
+
 def nullorstrip(inp):
     return ("" if isnull(inp) else inp.strip())
 
@@ -313,41 +344,41 @@ def findlinesymbol(rec_lin_ber, timetable, lineid):
 
 
 def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
-            zeit = timedelta()
-            zeithin = timedelta()
-            zeitwarte = timedelta()
-            prevwarte = timedelta()
-            coursestops = []
+    zeit = timedelta()
+    zeithin = timedelta()
+    zeitwarte = timedelta()
+    prevwarte = timedelta()
+    coursestops = []
 
-            for index, row in lid_course.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
-                stopid = int(row["STOP_NR"])
-                posid = int(row["STOPPING_POINT_NR"])
-                stopnr = int(row["LINE_CONSEC_NR"])
-                # verschieben
-                linedir = int(row["LINE_DIR_NR"])
+    for index, row in lid_course.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
+        stopid = int(row["STOP_NR"])
+        posid = int(row["STOPPING_POINT_NR"])
+        stopnr = int(row["LINE_CONSEC_NR"])
+        # verschieben
+        linedir = int(row["LINE_DIR_NR"])
 
-                for index, row in lid_travel_time_type.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
-                    zeithin = timedelta(seconds=int(row["TT_REL"]))
-                    zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
-                    break
-                zeit += zeithin
+        for index, row in lid_travel_time_type.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
+            zeithin = timedelta(seconds=int(row["TT_REL"]))
+            zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
+            break
+        zeit += zeithin
 
-                stoppos = None
-                for areaid in stops[stopid].areas:
-                    if posid in stops[stopid].areas[areaid].positions:
-                        stoppos = stops[stopid].areas[areaid].positions[posid]
-                        break
-                if zeitwarte != timedelta():
-                    coursestops.append(CourseStop(stopnr, stoppos, zeit,
-                                                  dep=False, different_arrdep=True))
-                    zeit += zeitwarte
-                    coursestops.append(CourseStop(stopnr, stoppos, zeit,
-                                                  dep=True, different_arrdep=True))
-                else:
-                    coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=False))
-                    coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=True))
-            # coursestops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
-            return Course(line, variant, linedir, coursestops[1:-1])
+        stoppos = None
+        for areaid in stops[stopid].areas:
+            if posid in stops[stopid].areas[areaid].positions:
+                stoppos = stops[stopid].areas[areaid].positions[posid]
+                break
+        if zeitwarte != timedelta():
+            coursestops.append(CourseStop(stopnr, stoppos, zeit,
+                                          dep=False, different_arrdep=True))
+            zeit += zeitwarte
+            coursestops.append(CourseStop(stopnr, stoppos, zeit,
+                                          dep=True, different_arrdep=True))
+        else:
+            coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=False))
+            coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=True))
+    # coursestops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
+    return Course(line, variant, linedir, coursestops[1:-1])
 
 
 def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
