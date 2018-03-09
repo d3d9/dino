@@ -452,19 +452,40 @@ def printstops(stopdict):
     areac = 0
     pointc = 0
     text = ""
-    for stop in stopdict:
+    for stopid in stopdict:
         stopc += 1
-        text += str(stopdict[stop]) + "\n"
-        for area in stopdict[stop].areas:
+        text += str(stopdict[stopid]) + "\n"
+        for areaid in stopdict[stopid].areas:
             areac += 1
-            text += "-"+str(stopdict[stop].areas[area]) + "\n"
-            for pos in stopdict[stop].areas[area].positions:
+            text += "-"+str(stopdict[stopid].areas[areaid]) + "\n"
+            for posid in stopdict[stopid].areas[areaid].positions:
                 pointc += 1
-                text += "--"+str(stopdict[stop].areas[area].positions[pos]) + "\n"
+                text += "--"+str(stopdict[stopid].areas[areaid].positions[posid]) + "\n"
         text += "\n"
 
     text += f"Stops: {stopc}\nAreas: {areac}\nPoints: {pointc}"
     return text
+
+
+def csvstops(stopdict, filename):
+    m = 0.000001
+    positionrows = []
+    for stopid in stopdict:
+        s = stopdict[stopid]
+        for areaid in stopdict[stopid].areas:
+            a = stopdict[stopid].areas[areaid]
+            for posid in stopdict[stopid].areas[areaid].positions:
+                p = stopdict[stopid].areas[areaid].positions[posid]
+                positionrows.append((s.stopid, s.name, s.placename, s.shortname, s.ifopt,
+                                     a.areaid, a.name, a.ifopt, p.posid, p.name, p.ifopt,
+                                     round(float(p.pos_x)*m, 6), round(float(p.pos_y)*m, 6),
+                                     ",".join(str(fz) for fz in s.farezones)))
+    with open(filename, 'w') as sf:
+        outwriter = writer(sf, delimiter=";", lineterminator='\n')
+        outwriter.writerow(("stopid", "stopname", "placename", "stopshortname", "stopifopt",
+                            "areaid", "areaname", "areaifopt", "posid", "posname", "posifopt",
+                            "X", "Y", "farezones"))
+        outwriter.writerows(positionrows)
 
 
 '''

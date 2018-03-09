@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from DINO import Version, Line, getlinetrips, readrestrictions, stoptext, readallstops, printstops
+from DINO import Version, Line, getlinetrips, readrestrictions, stoptext, readallstops, printstops, csvstops
 import pandas
 
 
@@ -33,12 +33,13 @@ if __name__ == "__main__":
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
 
     # list of stops/areas/positions
-    '''
+    #'''
     print(printstops(stops))
-    '''
+    csvstops(stops, "csv/stops.csv")
+    #'''
 
     # line(s) to csv
-    #'''
+    '''
     inputlines = input("Linien-IDs kommagetrennt (\"K\" für Komplettexport): ")
     if inputlines == "K":
         lines = set(rec_lin_ber.query("VERSION == @version.id").index.values)
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     for lineid in lines:
         line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
         line.ascsv("csv")
-    #'''
+    '''
 
     # course texts for line
     '''
