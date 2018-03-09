@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from DINO import Line, findlinesymbol, getlinetrips, readrestrictions, stoptext, readallstops, printstops
+from DINO import Line, getlinetrips, readrestrictions, stoptext, readallstops, printstops
 import pandas
-from datetime import timedelta
 
 
 if __name__ == "__main__":

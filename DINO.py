@@ -179,17 +179,15 @@ class StopPosition():
 
 
 class CourseStop():
-    def __init__(self, stopnr, stoppos, time, dep, different_arrdep=False):
+    def __init__(self, stopnr, stoppos, arrtime, deptime):
         self.stopnr = stopnr
         self.stoppos = stoppos
-        self.time = time
-        self.dep = dep
-        # geht das besser?
-        self.different_arrdep = different_arrdep
+        self.arrtime = arrtime
+        self.deptime = deptime
 
     def __str__(self):
-        return "CourseStop " + str(self.stopnr) + " " + ("dep" if self.dep else "arr") + " " \
-                + str(self.time) + " " + str(self.stoppos.area.stop.stopid) + ":" + str(self.stoppos.posid) \
+        return "CourseStop " + str(self.stopnr) + " arr " + str(self.arrtime) + " dep " \
+                + str(self.deptime) + " " + str(self.stoppos.area.stop.stopid) + ":" + str(self.stoppos.posid) \
                 + " (" + self.stoppos.area.stop.name + " " + self.stoppos.name + ", " + self.stoppos.ifopt + ")"
 
 
@@ -222,8 +220,8 @@ class Line():
                     outwriter = writer(cf, delimiter=";", lineterminator='\n')
                     outwriter.writerows([(stop.stopnr, stop.stoppos.ifopt,
                                           stop.stoppos.area.stop.name,
-                                          int(stop.time.total_seconds())) \
-                                         for stop in singlestops(course)])
+                                          int(stop.deptime.total_seconds())) \
+                                         for stop in course.stops])
                 print(f"route file \"{filename}\" written")
             except Exception as e:
                 print(f"error writing route file: {e}")
@@ -236,8 +234,8 @@ class Course():
         self.variant = variant
         self.linedir = linedir
         self.stops = stops
-        self.time = stops[0].time
-        self.endtime = stops[-1].time
+        self.time = stops[0].deptime
+        self.endtime = stops[-1].arrtime
         self.stopfrom = stops[0].stoppos.area.stop.name
         self.stopto = stops[-1].stoppos.area.stop.name
         self.duration = self.endtime - self.time
@@ -261,7 +259,8 @@ class Trip():
         self.stops = deepcopy(self.course.stops)
 
         for stop in self.stops:
-            stop.time += starttime
+            stop.arrtime += starttime
+            stop.deptime += starttime
 
     def __str__(self):
         # was ist für time besser? mit:
@@ -290,26 +289,15 @@ class Trip():
 # todo: nochmal woanders hin verschieben
 def stoptext(thing):
     text = str(thing) + "\n"
-    prevnr = 0
     for stop in thing.stops:
-        if stop.different_arrdep or prevnr != stop.stopnr:
-            text += str(stop.stopnr)+":\t"
-            if stop.different_arrdep:
-                text += "dep" if stop.dep else "arr"
-            else:
-                text += "   "
-            text += " "+str(stop.time)+"\t"+stop.stoppos.area.stop.name+" "+stop.stoppos.name+"\n"
-            prevnr = stop.stopnr
+        text += str(stop.stopnr)+":\t"
+        if stop.deptime != stop.arrtime:
+            text += "arr "+str(stop.arrtime)+"\t"+stop.stoppos.area.stop.name+" "+stop.stoppos.name+"\n"
+            text += "\tdep "+str(stop.deptime)+"\t"+stop.stoppos.area.stop.name+" "+stop.stoppos.name+"\n"
+        else:
+            text += "    "+str(stop.deptime)+"\t"+stop.stoppos.area.stop.name+" "+stop.stoppos.name+"\n"
 
     return text
-
-
-def singlestops(thing):
-    stops = []
-    for si, stop in enumerate(thing.stops):
-        if (not si) or (si == (len(thing.stops) - 1)) or stop.dep:
-            stops.append(stop)
-    return stops
 
 
 def nullorstrip(inp):
@@ -368,17 +356,11 @@ def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
             if posid in stops[stopid].areas[areaid].positions:
                 stoppos = stops[stopid].areas[areaid].positions[posid]
                 break
-        if zeitwarte != timedelta():
-            coursestops.append(CourseStop(stopnr, stoppos, zeit,
-                                          dep=False, different_arrdep=True))
-            zeit += zeitwarte
-            coursestops.append(CourseStop(stopnr, stoppos, zeit,
-                                          dep=True, different_arrdep=True))
-        else:
-            coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=False))
-            coursestops.append(CourseStop(stopnr, stoppos, zeit, dep=True))
-    # coursestops[1:-1] damit der erste stop keine ankunft und der letzte keine abfahrt hat
-    return Course(line, variant, linedir, coursestops[1:-1])
+
+        coursestops.append(CourseStop(stopnr, stoppos, zeit, zeit + zeitwarte))
+        zeit += zeitwarte
+
+    return Course(line, variant, linedir, coursestops)
 
 
 def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
