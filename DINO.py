@@ -8,6 +8,28 @@ from copy import deepcopy
 from csv import writer
 
 
+class Version():
+    def __init__(self, row):
+        self.id = row.name
+        self.text = row["VERSION_TEXT"].strip()
+        self.periodid = row["TIMETABLE_PERIOD"].strip()
+        self.periodname = row["TT_PERIOD_NAME"].strip()
+        self.netid = row["NET_ID"].strip()
+        self.priority = row["PERIOD_PRIORITY"]
+
+        datefrom = row["PERIOD_DATE_FROM"].strip()
+        dateuntil = row["PERIOD_DATE_TO"].strip()
+        self.firstday = int(datefrom[6:8])
+        self.firstmonth = int(datefrom[4:6])
+        self.startyear = int(datefrom[0:4])
+        self.lastday = int(dateuntil[6:8])
+        self.lastmonth = int(dateuntil[4:6])
+        self.endyear = int(dateuntil[0:4])
+
+    def __str__(self):
+        return "Version " + str(self.id) + ", "+ self.text + " \"" + self.periodname + "\""
+
+
 class Restriction():
     def __init__(self, restrictionstr, datefrom, dateuntil, text=""):
         self.restrictionstr = restrictionstr
@@ -109,11 +131,11 @@ class Restriction():
 
 
 class Stop():
-    def __init__(self, stopid, timetable, stoptype, name, shortname, \
+    def __init__(self, stopid, version, stoptype, name, shortname, \
                  # addname, addname_noloc, \
                  pos_x, pos_y, placename, placeocc, farezones, ifopt):
         self.stopid = stopid
-        self.timetable = timetable
+        self.version = version
         # REF_STOP_NR/NAME ?
         self.stoptype = stoptype
         self.name = name
@@ -135,7 +157,7 @@ class Stop():
                + ",".join(str(fz) for fz in self.farezones) + ", Location " + self.pos_x + "," + self.pos_y
 
     def readareas(self, rec_stop_area):
-        for index, row in rec_stop_area.query("VERSION == @self.timetable & STOP_NR == @self.stopid").iterrows():
+        for index, row in rec_stop_area.query("VERSION == @self.version.id & STOP_NR == @self.stopid").iterrows():
             areaid = row["STOP_AREA_NR"]
             self.areas[areaid] = StopArea(self, areaid, nullorstrip(row["STOP_AREA_NAME"]), nullorstrip(row["IFOPT"]))
 
@@ -154,7 +176,7 @@ class StopArea():
                + "\", IFOPT " + (self.ifopt if self.ifopt else "-")
 
     def readpoints(self, rec_stopping_points):
-        for index, row in rec_stopping_points.query("VERSION == @self.stop.timetable & STOP_NR == @self.stop.stopid & STOP_AREA_NR == @self.areaid").iterrows():
+        for index, row in rec_stopping_points.query("VERSION == @self.stop.version.id & STOP_NR == @self.stop.stopid & STOP_AREA_NR == @self.areaid").iterrows():
             posid = row["STOPPING_POINT_NR"]
             self.positions[posid] = \
                 StopPosition(self, posid, nullorstrip(row["STOPPING_POINT_POS_X"]),
@@ -192,15 +214,15 @@ class CourseStop():
 
 
 class Line():
-    def __init__(self, timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops):
-        self.timetable = timetable
+    def __init__(self, version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops):
+        self.version = version
         self.lineid = str(lineid)
-        self.linesymbol = findlinesymbol(rec_lin_ber, self.timetable, self.lineid)
+        self.linesymbol = findlinesymbol(rec_lin_ber, self.version, self.lineid)
         self.courses = {}
         getlinecourses(self, rec_lin_ber, lid_course, lid_travel_time_type, stops)
 
     def __str__(self):
-        return "Line " + self.linesymbol + " (" + self.timetable + ":" + self.lineid + ")"
+        return "Line " + self.linesymbol + " (" + str(self.version.id) + ":" + self.lineid + ")"
 
     def ascsv(self, directory):
         for courseid in self.courses:
@@ -242,7 +264,7 @@ class Course():
         # + daytype und restriction hier nochmal angeben
 
     def __str__(self):
-        return "Course " + self.line.timetable + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
+        return "Course " + str(self.line.version.id) + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
                 + " from " + self.stopfrom + " to " + self.stopto \
                 + " (" + str(self.duration) + ")"
 
@@ -266,7 +288,7 @@ class Trip():
         # was ist für time besser? mit:
         # str(startzeit//3600).zfill(2)+":"+str((startzeit//60)%60).zfill(2)+":"+str(startzeit%60).zfill(2)
         # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
-        return "Trip " + self.course.line.timetable + ":" + self.course.line.lineid + ":" + str(self.course.linedir) + ":" + str(self.course.variant) \
+        return "Trip " + str(self.course.line.version.id) + ":" + self.course.line.lineid + ":" + str(self.course.linedir) + ":" + str(self.course.variant) \
                 + " at " + str(self.time) + " from " + self.course.stopfrom + " to " + self.course.stopto \
                 + " (" + str(self.course.duration) + "), restriction \"" + self.restriction.text \
                 + "\", daytype " + str(self.daytype)
@@ -326,8 +348,8 @@ def dayvalid(r, day, daytype):
     return daytypevalid(datetime(*day).weekday(), daytype) and r.dayresvalid(*day)
 
 
-def findlinesymbol(rec_lin_ber, timetable, lineid):
-    for index, row in rec_lin_ber.query("VERSION == @timetable & LINE_NR == @lineid").iterrows():
+def findlinesymbol(rec_lin_ber, version, lineid):
+    for index, row in rec_lin_ber.query("VERSION == @version.id & LINE_NR == @lineid").iterrows():
         return str(row["LINE_NAME"]).strip()
 
 
@@ -338,14 +360,14 @@ def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
     prevwarte = timedelta()
     coursestops = []
 
-    for index, row in lid_course.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
+    for index, row in lid_course.query("VERSION == @line.version.id & LINE_NR == @line.lineid & STR_LINE_VAR == @variant").iterrows():
         stopid = int(row["STOP_NR"])
         posid = int(row["STOPPING_POINT_NR"])
         stopnr = int(row["LINE_CONSEC_NR"])
         # verschieben
         linedir = int(row["LINE_DIR_NR"])
 
-        for index, row in lid_travel_time_type.query("VERSION == @line.timetable & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
+        for index, row in lid_travel_time_type.query("VERSION == @line.version.id & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
             zeithin = timedelta(seconds=int(row["TT_REL"]))
             zeitwarte = timedelta(seconds=int(row["STOPPING_TIME"]))
             break
@@ -364,7 +386,7 @@ def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
 
 
 def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
-    for index, row in rec_lin_ber.query("VERSION == @line.timetable & LINE_NR == @line.lineid").iterrows():
+    for index, row in rec_lin_ber.query("VERSION == @line.version.id & LINE_NR == @line.lineid").iterrows():
         variant = int(row["STR_LINE_VAR"])
         line.courses[variant] = getcourse(line, variant, lid_course, lid_travel_time_type, stops)
 
@@ -372,7 +394,7 @@ def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
 def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
                  lid_course, lid_travel_time_type, stops):
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
-    querystring = "VERSION == @line.timetable & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
+    querystring = "VERSION == @line.version.id & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
     # hoffentlich gibt es keine echte LINE_DIR_NR=0
     if direction:
         querystring += " & LINE_DIR_NR == @direction"
@@ -393,9 +415,9 @@ def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
     return trips
 
 
-def readrestrictions(service_restriction, timetable):
+def readrestrictions(service_restriction, version):
     restrictions = {}
-    for index, row in service_restriction.query("VERSION == @timetable").iterrows():
+    for index, row in service_restriction.query("VERSION == @version.id").iterrows():
         text = ""
         for n in range(1, 6):
             rt = row["RESTRICT_TEXT"+str(n)]
@@ -407,15 +429,15 @@ def readrestrictions(service_restriction, timetable):
     return restrictions
 
 
-def readallstops(timetable, rec_stop, rec_stop_area, rec_stopping_points):
+def readallstops(version, rec_stop, rec_stop_area, rec_stopping_points):
     stops = {}
-    for index, row in rec_stop.query("VERSION == @timetable").iterrows():
+    for index, row in rec_stop.query("VERSION == @version.id").iterrows():
         farezones = [int(row["FARE_ZONE"])]
         for x in range(2, 7):
             farezone = int(row["FARE_ZONE"+str(x)])
             if farezone != -1:
                 farezones.append(farezone)
-        stops[index] = Stop(index, timetable, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), row["STOP_SHORTNAME"].strip(), \
+        stops[index] = Stop(index, version, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), row["STOP_SHORTNAME"].strip(), \
                             # addnamerow["ADD_STOP_NAME_WITH_LOCALITY"].strip(), addnamerow["ADD_STOP_NAME_WITHOUT_LOCALITY"].strip(), \
                             row["STOP_POS_X"].strip(), row["STOP_POS_Y"].strip(), row["PLACE"].strip(), \
                             row["OCC"], tuple(farezones), row["IFOPT"].strip())

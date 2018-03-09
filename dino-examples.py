@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from DINO import Line, getlinetrips, readrestrictions, stoptext, readallstops, printstops
+from DINO import Version, Line, getlinetrips, readrestrictions, stoptext, readallstops, printstops
 import pandas
 
 
 if __name__ == "__main__":
+    with open("./dino/set_version.din", 'r') as verfile:
+        set_version = pandas.read_csv(verfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'VERSION_TEXT':str,'TIMETABLE_PERIOD':str,'TT_PERIOD_NAME':str,'PERIOD_DATE_FROM':str,'PERIOD_DATE_TO':str,'NET_ID':str,'PERIOD_PRIORITY':int}, index_col=0)
     with open("./dino/rec_trip.din", 'r') as tripfile:
         rec_trip = pandas.read_csv(tripfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'DEPARTURE_TIME':int,'DEP_STOP_NR':int,'ARR_STOP_NR':int,'DAY_ATTRIBUTE_NR':int,'RESTRICTION':str,'NOTICE':str,'NOTICE_2':str,'NOTICE_3':str,'NOTICE_4':str,'NOTICE_5':str})
     with open("./dino/service_restriction.din", 'r') as restrictionfile:
@@ -25,8 +27,10 @@ if __name__ == "__main__":
     with open("./dino/rec_lin_ber.din", 'r') as linefile:
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
-    timetable = "12"
-    stops = readallstops(timetable, rec_stop, rec_stop_area, rec_stopping_points)
+    versionid = 12  # HST (DINO_VRR_20180209)
+
+    version = Version(set_version.loc[versionid])
+    stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
 
     # list of stops/areas/positions
     '''
@@ -37,18 +41,18 @@ if __name__ == "__main__":
     #'''
     inputlines = input("Linien-IDs kommagetrennt (\"K\" für Komplettexport): ")
     if inputlines == "K":
-        lines = set(rec_lin_ber.query("VERSION == @timetable").index.values)
+        lines = set(rec_lin_ber.query("VERSION == @version.id").index.values)
     else:
         lines = list(map(int, inputlines.split(",")))
     for lineid in lines:
-        line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+        line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
         line.ascsv("csv")
     #'''
 
     # course texts for line
     '''
     lineid = 50514
-    line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+    line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
     print("\n".join([stoptext(course) for course in [line.courses[x] for x in line.courses]]))
     '''
 
@@ -60,8 +64,8 @@ if __name__ == "__main__":
     testtime = (18,50,0)
     limit = -1
 
-    line = Line(timetable, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
-    restrictions = readrestrictions(service_restriction, timetable)
+    line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+    restrictions = readrestrictions(service_restriction, version)
     print("\n".join([stoptext(trip) for trip in getlinetrips(line, direction, testdate, testtime, limit,
                                                              restrictions, rec_trip, lid_course,
                                                              lid_travel_time_type, stops)]))
