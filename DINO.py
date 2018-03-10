@@ -201,16 +201,18 @@ class StopPosition():
 
 
 class CourseStop():
-    def __init__(self, stopnr, stoppos, arrtime, deptime):
+    def __init__(self, stopnr, stoppos, arrtime, deptime, distanceto):
         self.stopnr = stopnr
         self.stoppos = stoppos
         self.arrtime = arrtime
         self.deptime = deptime
+        self.distanceto = distanceto
 
     def __str__(self):
         return "CourseStop " + str(self.stopnr) + " arr " + str(self.arrtime) + " dep " \
                 + str(self.deptime) + " " + str(self.stoppos.area.stop.stopid) + ":" + str(self.stoppos.posid) \
-                + " (" + self.stoppos.area.stop.name + " " + self.stoppos.name + ", " + self.stoppos.ifopt + ")"
+                + " (" + self.stoppos.area.stop.name + " " + self.stoppos.name + ", " + self.stoppos.ifopt \
+                + "), -> " + str(self.distanceto) + " m"
 
 
 class Line():
@@ -261,12 +263,14 @@ class Course():
         self.stopfrom = stops[0].stoppos.area.stop.name
         self.stopto = stops[-1].stoppos.area.stop.name
         self.duration = self.endtime - self.time
-        # + daytype und restriction hier nochmal angeben
+        self.distance = 0
+        for stop in self.stops:
+            self.distance += stop.distanceto
 
     def __str__(self):
         return "Course " + str(self.line.version.id) + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
                 + " from " + self.stopfrom + " to " + self.stopto \
-                + " (" + str(self.duration) + ")"
+                + " (" + str(self.duration) + ", " + str(self.distance) + " m)"
 
 
 class Trip():
@@ -366,6 +370,7 @@ def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
         stopnr = int(row["LINE_CONSEC_NR"])
         # verschieben
         linedir = int(row["LINE_DIR_NR"])
+        distanceto = int(row["LENGTH"])
 
         for index, row in lid_travel_time_type.query("VERSION == @line.version.id & LINE_NR == @line.lineid & STR_LINE_VAR == @variant & LINE_CONSEC_NR == @stopnr").iterrows():
             zeithin = timedelta(seconds=int(row["TT_REL"]))
@@ -379,7 +384,7 @@ def getcourse(line, variant, lid_course, lid_travel_time_type, stops):
                 stoppos = stops[stopid].areas[areaid].positions[posid]
                 break
 
-        coursestops.append(CourseStop(stopnr, stoppos, zeit, zeit + zeitwarte))
+        coursestops.append(CourseStop(stopnr, stoppos, zeit, zeit + zeitwarte, distanceto))
         zeit += zeitwarte
 
     return Course(line, variant, linedir, coursestops)
