@@ -4,7 +4,6 @@
 import os
 from pandas import isnull
 from datetime import datetime, timedelta
-from copy import deepcopy
 from csv import writer
 
 
