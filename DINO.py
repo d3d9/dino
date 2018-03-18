@@ -474,7 +474,7 @@ def readallstops(version, rec_stop, rec_stop_area, rec_stopping_points):
             farezone = int(row["FARE_ZONE"+str(x)])
             if farezone != -1:
                 farezones.append(farezone)
-        stops[index] = Stop(index, version, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), row["STOP_SHORTNAME"].strip(), \
+        stops[index] = Stop(index, version, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), nullorstrip(row["STOP_SHORTNAME"]), \
                             # addnamerow["ADD_STOP_NAME_WITH_LOCALITY"].strip(), addnamerow["ADD_STOP_NAME_WITHOUT_LOCALITY"].strip(), \
                             row["STOP_POS_X"].strip(), row["STOP_POS_Y"].strip(), row["PLACE"].strip(), \
                             row["OCC"], tuple(farezones), row["IFOPT"].strip())
