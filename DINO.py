@@ -25,8 +25,12 @@ class Version():
         self.lastmonth = int(dateuntil[4:6])
         self.endyear = int(dateuntil[0:4])
 
+        self.validfromstr = str(self.startyear) + "-" + str(self.firstmonth).zfill(2) + "-" + str(self.firstday).zfill(2)
+        self.validtostr = str(self.endyear) + "-" + str(self.lastmonth).zfill(2) + "-" + str(self.lastday).zfill(2)
+
     def __str__(self):
-        return "Version " + str(self.id) + ", "+ self.text + " \"" + self.periodname + "\""
+        return "Version " + str(self.id) + ", "+ self.text + " \"" + self.periodname + "\"" \
+               + " valid from " + self.validfromstr + " to " + self.validtostr
 
 
 class Restriction():

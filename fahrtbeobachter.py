@@ -138,11 +138,11 @@ if __name__ == "__main__":
             stopname = rtts.tripstop.coursestop.stoppos.area.stop.name
 
             arrow = ("->" if currentstopnr == stopnr else "  ")
-            print(arrow + "{:>2}".format(str(stopnr)) + "  " + "{:32}".format(stopname) \
-                  + "arr " + str(rtts.tripstop.arrtime) + " rtarr "+ nonestr(rtts.rtarrtime) \
+            print(arrow + "{:>2}".format(str(stopnr)) + "  " + "{:32}".format(stopname)
+                  + "arr " + str(rtts.tripstop.arrtime) + " rtarr " + nonestr(rtts.rtarrtime)
                   + " (" + nonestr(rtts.arrdelaystr) + ")")
-            print(arrow + "  " + "  " + "{:32}".format("Status: "+nonestr(rtts.status)) \
-                  + "dep " + str(rtts.tripstop.deptime) + " rtdep " + nonestr(rtts.rtdeptime) \
+            print(arrow + "  " + "  " + "{:32}".format("Status: "+nonestr(rtts.status))
+                  + "dep " + str(rtts.tripstop.deptime) + " rtdep " + nonestr(rtts.rtdeptime)
                   + " (" + nonestr(rtts.depdelaystr) + ")")
         print("Eingaben:\na Ankunft\nd Abfahrt\np Vorbeifahrt\nr Reset\n@{nr} Haltenummer ändern\ne Ende")
         inp = input("Eingabe: ")
@@ -157,9 +157,9 @@ if __name__ == "__main__":
                 "status", "planarr", "rtarr", "arrdelay",
                 "plandep", "rtdep", "depdelay")]
     maxfrueh = timedelta(0)
-    maxfruehstr = ""
+    maxfruehstr = "-"
     maxspaet = timedelta(0)
-    maxspaetstr = ""
+    maxspaetstr = "-"
     for rtts in rtstops:
         stoppos = rtts.tripstop.coursestop.stoppos
         if rtts.rtdeptime is not None:
@@ -174,7 +174,7 @@ if __name__ == "__main__":
                         rtts.status, rtts.tripstop.arrtime, rtts.rtarrtime, rtts.arrdelaystr,
                         rtts.tripstop.deptime, rtts.rtdeptime, rtts.depdelaystr))
 
-    print("Maximale Abfahrtsverfühung:", maxfruehstr)
+    print("Maximale Abfahrtsverfrühung:", maxfruehstr)
     print("Maximale Abfahrtsverspätung:", maxspaetstr)
 
     print("\nDateiname:", filename)
@@ -183,16 +183,20 @@ if __name__ == "__main__":
         writer(tf, delimiter=';', lineterminator='\n').writerows(csvrows)
 
     print("\nSchreiben:\n")
-    print("Hallo,\n\nich berichte über eine Fahrt der Linie " + line.linesymbol + ", Abfahrt um " \
-          + str(trip.starttime) + " Uhr von " + trip.course.stopfrom + " in Richtung " \
+    print("Hallo,\n\nich berichte über eine Fahrt der Linie " + line.linesymbol + ", Abfahrt um "
+          + str(trip.starttime) + " Uhr von " + trip.course.stopfrom + " in Richtung "
           + trip.course.stopto + ".")
     print("Die größte Abfahrtsverspätung beträgt " + maxspaetstr +
           ", die verfrühteste Abfahrt war " + maxfruehstr + ".")
-    print("\nHier ist eine Liste von jeder Haltestelle (Im Anhang ist eine genauere csv-Datei) (Daten sind nicht unbedingt komplett erfasst):")
-    print("Nr, Haltestellenname, Abfahrtsdifferenz, Status")
+    print("\nHier ist eine Liste von den befahrenen Haltestellen (Im Anhang ist eine genauere csv-Datei) (Daten sind nicht unbedingt komplett erfasst):")
+    print("(\"Nr. Abfahrtsverspätung Status bei Haltestellenname\")")
     for rtts in rtstops:
-        stoppos = rtts.tripstop.coursestop.stoppos
-        print(str(rtts.tripstop.coursestop.stopnr).zfill(2) + ", " + stoppos.area.stop.name
-              + ", " + nonestr(rtts.depdelaystr) + ", " + nonestr(rtts.status))
-    print("\nViele Grüße\n. . .")
+        if rtts.status:
+            stoppos = rtts.tripstop.coursestop.stoppos
+            print(str(rtts.tripstop.coursestop.stopnr).zfill(2) + ". " + nonestr(rtts.depdelaystr)
+                  + " " + nonestr(rtts.status) + " bei " + stoppos.area.stop.name)
+    print("\nQuelle: Verkehrsverbund Rhein-Ruhr/OpenVRR")
+    print(f"Fahrplandaten: {version.periodname} ({version.text}) gültig von "
+          + f"{version.validfromstr} bis {version.validtostr}")
+    print("\nViele Grüße\n")
 
