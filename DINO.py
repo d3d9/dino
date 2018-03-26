@@ -255,9 +255,9 @@ class Line():
                 filename = os.path.join(os.getcwd(), directory, "vrr_"+self.linesymbol+"_"+str(courseid)+"_"+firststop+"_"+laststop+".csv")
                 with open(filename, 'w') as cf:
                     outwriter = writer(cf, delimiter=";", lineterminator='\n')
+                    #todo: eventuell timing_groups dazutun und csv mit trips herausgeben
                     outwriter.writerows([(stop.stopnr, stop.stoppos.ifopt,
-                                          stop.stoppos.area.stop.name,
-                                          int(stop.deptime.total_seconds())) \
+                                          stop.stoppos.area.stop.name) \
                                          for stop in course.stops])
                 print(f"route file \"{filename}\" written")
             except Exception as e:
