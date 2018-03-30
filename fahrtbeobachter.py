@@ -152,7 +152,8 @@ if __name__ == "__main__":
     filename = "csv/" + "fb_" + line.linesymbol + "_" + str(trip.course.variant) + "_" \
                + trip.course.stops[0].stoppos.area.stop.shortname + "-" \
                + trip.course.stops[-1].stoppos.area.stop.shortname + "_" \
-               + str(today[0]) + "-" + str(today[1]) + "-" + str(today[2]) + "_" + str(trip.starttime) + ".csv"
+               + str(today[0]) + "-" + str(today[1]).zfill(2) + "-" + str(today[2]).zfill(2) \
+               + "_" + str(trip.starttime) + ".csv"
 
     csvrows = [("stopnr", "stopname", "ifopt",
                 "status", "planarr", "rtarr", "arrdelay",
