@@ -359,13 +359,15 @@ def daysin(month, year):
     return days
 
 
-def daytypevalid(weekday, daytype):
+def daytypevalid(weekday, daytype, ph=False):
     assert 0 <= weekday <= 6
+    if ph:
+        weekday = 6
     return bool(int(bin(daytype)[2:].zfill(7)[weekday]))
 
 
-def dayvalid(r, day, daytype):
-    return daytypevalid(datetime(*day).weekday(), daytype) and r.dayresvalid(*day)
+def dayvalid(r, day, daytype, ph=False):
+    return daytypevalid(datetime(*day).weekday(), daytype, ph) and r.dayresvalid(*day)
 
 
 def findlinesymbol(rec_lin_ber, version, lineid):
@@ -424,7 +426,7 @@ def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
         line.courses[variant] = getcourse(line, variant, lid_course, lid_travel_time_type, stops)
 
 
-def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
+def getlinetrips(line, direction, day, ph, fromtime, limit, restrictions, rec_trip,
                  lid_course, lid_travel_time_type, stops):
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
     querystring = "VERSION == @line.version.id & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
@@ -441,7 +443,7 @@ def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
 
         restriction = Restriction(*restrictions[row["RESTRICTION"].strip()])
         daytype = row["DAY_ATTRIBUTE_NR"]
-        if dayvalid(restriction, day, daytype):
+        if dayvalid(restriction, day, daytype, ph):
             course = line.courses[row["STR_LINE_VAR"]]
             starttime = timedelta(seconds=row["DEPARTURE_TIME"])
             timing_group_nr = row["TIMING_GROUP_NR"]

@@ -62,12 +62,13 @@ if __name__ == "__main__":
     lineid = 50514
     direction = 0
     testdate = (2018,2,23)
+    ph = False
     testtime = (18,50,0)
     limit = -1
 
     line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
     restrictions = readrestrictions(service_restriction, version)
-    print("\n".join([trip.stoptext() for trip in getlinetrips(line, direction, testdate, testtime, limit,
+    print("\n".join([trip.stoptext() for trip in getlinetrips(line, direction, testdate, ph, testtime, limit,
                                                              restrictions, rec_trip, lid_course,
                                                              lid_travel_time_type, stops)]))
     #'''

@@ -80,12 +80,13 @@ if __name__ == "__main__":
     restrictions = readrestrictions(service_restriction, version)
 
     today = date.today().timetuple()[:3]
+    ph = (True if input("Ist heute ein Feiertag? (j/*) ") == "j" else False)
 
     line = Line(version, int(input("Linien-ID: ")), rec_lin_ber, lid_course, lid_travel_time_type, stops)
     print("geladen: ", line)
 
     # temporär, später via Abfahrtsmonitor oderso laden
-    trips = sorted(getlinetrips(line, 0, today, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops), key=lambda x: x.starttime)
+    trips = sorted(getlinetrips(line, 0, today, ph, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops), key=lambda x: x.starttime)
     for ti, trip in enumerate(trips):
         print(str(ti)+":", trip)
 

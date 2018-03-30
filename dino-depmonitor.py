@@ -36,6 +36,7 @@ if __name__ == "__main__":
     teststopid = 2020
     # plat
     testdate = (2018, 3, 17)
+    ph = False
     testtime = (16, 20, 0)
     # limit = -1
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     for lineid in servinglines:
         line = servinglines[lineid]
         print(line)
-        for trip in getlinetrips(line, 0, testdate, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops):
+        for trip in getlinetrips(line, 0, testdate, ph, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops):
             for stop in trip.stops:
                 if stop.coursestop.stopnr != len(trip.stops) \
                    and stop.coursestop.stoppos.area.stop.stopid == teststopid \
