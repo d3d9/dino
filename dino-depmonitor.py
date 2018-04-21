@@ -17,6 +17,8 @@ if __name__ == "__main__":
         rec_trip = pandas.read_csv(tripfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'DEPARTURE_TIME':int,'DEP_STOP_NR':int,'ARR_STOP_NR':int,'DAY_ATTRIBUTE_NR':int,'RESTRICTION':str,'NOTICE':str,'NOTICE_2':str,'NOTICE_3':str,'NOTICE_4':str,'NOTICE_5':str,'TIMING_GROUP_NR':int})
     with open("./dino/service_restriction.din", 'r') as restrictionfile:
         service_restriction = pandas.read_csv(restrictionfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'RESTRICTION':str,'RESTRICT_TEXT1':str,'RESTRICT_TEXT2':str,'RESTRICT_TEXT3':str,'RESTRICT_TEXT4':str,'RESTRICT_TEXT5':str,'RESTRICTION_DAYS':str})
+    with open("./dino/calendar_of_the_company.din", 'r') as calendarfile:
+        calendar_otc = pandas.read_csv(calendarfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'DAY':str,'DAY_TEXT':str,'DAY_TYPE_NR':int})
     with open("./dino/rec_stop.din", 'r') as stopfile:
         rec_stop = pandas.read_csv(stopfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'STOP_TYPE_NR':int,'STOP_NAME':str,'STOP_SHORTNAME':str,'STOP_POS_X':str,'STOP_POS_Y':str,'PLACE':str,'OCC':int,'IFOPT':str}, index_col=1)
     with open("./dino/rec_stop_area.din", 'r') as areafile:
@@ -35,9 +37,8 @@ if __name__ == "__main__":
     versionid = 12  # HST (DINO_VRR_20180209)
     teststopid = 2020
     # plat
-    testdate = (2018, 3, 17)
-    ph = False
-    testtime = (16, 20, 0)
+    testdate = (2018, 4, 21)
+    testtime = (16, 40, 0)
     # limit = -1
 
     version = Version(set_version.loc[versionid])
@@ -55,7 +56,7 @@ if __name__ == "__main__":
     for lineid in servinglines:
         line = servinglines[lineid]
         print(line)
-        for trip in getlinetrips(line, 0, testdate, ph, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops):
+        for trip in getlinetrips(line, 0, testdate, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops, calendar_otc):
             for stop in trip.stops:
                 if stop.coursestop.stopnr != len(trip.stops) \
                    and stop.coursestop.stoppos.area.stop.stopid == teststopid \

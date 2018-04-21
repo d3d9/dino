@@ -359,15 +359,12 @@ def daysin(month, year):
     return days
 
 
-def daytypevalid(weekday, daytype, ph=False):
-    assert 0 <= weekday <= 6
-    if ph:
-        weekday = 6
-    return bool(int(bin(daytype)[2:].zfill(7)[weekday]))
-
-
-def dayvalid(r, day, daytype, ph=False):
-    return daytypevalid(datetime(*day).weekday(), daytype, ph) and r.dayresvalid(*day)
+def dayvalid(r, version, day, calendar_otc, daytype):
+    daystr = str(day[0]) + str(day[1]).zfill(2) + str(day[2]).zfill(2)
+    for index, row in calendar_otc.query("VERSION == @version.id & DAY == @daystr").iterrows():
+        tripdaytype = row["DAY_TYPE_NR"]
+        break
+    return bool(tripdaytype & daytype) and r.dayresvalid(*day)
 
 
 def findlinesymbol(rec_lin_ber, version, lineid):
@@ -426,8 +423,8 @@ def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
         line.courses[variant] = getcourse(line, variant, lid_course, lid_travel_time_type, stops)
 
 
-def getlinetrips(line, direction, day, ph, fromtime, limit, restrictions, rec_trip,
-                 lid_course, lid_travel_time_type, stops):
+def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
+                 lid_course, lid_travel_time_type, stops, calendar_otc):
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
     querystring = "VERSION == @line.version.id & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
     # hoffentlich gibt es keine echte LINE_DIR_NR=0
@@ -443,7 +440,7 @@ def getlinetrips(line, direction, day, ph, fromtime, limit, restrictions, rec_tr
 
         restriction = Restriction(*restrictions[row["RESTRICTION"].strip()])
         daytype = row["DAY_ATTRIBUTE_NR"]
-        if dayvalid(restriction, day, daytype, ph):
+        if dayvalid(restriction, line.version, day, calendar_otc, daytype):
             course = line.courses[row["STR_LINE_VAR"]]
             starttime = timedelta(seconds=row["DEPARTURE_TIME"])
             timing_group_nr = row["TIMING_GROUP_NR"]
@@ -482,8 +479,8 @@ def readallstops(version, rec_stop, rec_stop_area, rec_stopping_points):
                 farezones.append(farezone)
         stops[index] = Stop(index, version, row["STOP_TYPE_NR"], row["STOP_NAME"].strip(), nullorstrip(row["STOP_SHORTNAME"]), \
                             # addnamerow["ADD_STOP_NAME_WITH_LOCALITY"].strip(), addnamerow["ADD_STOP_NAME_WITHOUT_LOCALITY"].strip(), \
-                            row["STOP_POS_X"].strip(), row["STOP_POS_Y"].strip(), row["PLACE"].strip(), \
-                            row["OCC"], tuple(farezones), row["IFOPT"].strip())
+                            nullorstrip(row["STOP_POS_X"]), nullorstrip(row["STOP_POS_Y"]), row["PLACE"].strip(), \
+                            row["OCC"], tuple(farezones), nullorstrip(row["IFOPT"]))
         stops[index].readareas(rec_stop_area)
         for areaid in stops[index].areas:
             stops[index].areas[areaid].readpoints(rec_stopping_points)
@@ -513,6 +510,7 @@ def printstops(stopdict):
 def csvstops(stopdict, filename):
     m = 0.000001
     positionrows = []
+    nocoord = lambda pos: (round(float(pos)*m, 6) if pos else "")
     for stopid in stopdict:
         s = stopdict[stopid]
         for areaid in stopdict[stopid].areas:
@@ -521,7 +519,7 @@ def csvstops(stopdict, filename):
                 p = stopdict[stopid].areas[areaid].positions[posid]
                 positionrows.append((s.stopid, s.name, s.placename, s.shortname, s.ifopt,
                                      a.areaid, a.name, a.ifopt, p.posid, p.name, p.ifopt,
-                                     round(float(p.pos_x)*m, 6), round(float(p.pos_y)*m, 6),
+                                     nocoord(p.pos_x), nocoord(p.pos_y),
                                      ",".join(str(fz) for fz in s.farezones)))
     with open(filename, 'w') as sf:
         outwriter = writer(sf, delimiter=";", lineterminator='\n')

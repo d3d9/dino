@@ -57,6 +57,8 @@ if __name__ == "__main__":
         rec_trip = pandas.read_csv(tripfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'DEPARTURE_TIME':int,'DEP_STOP_NR':int,'ARR_STOP_NR':int,'DAY_ATTRIBUTE_NR':int,'RESTRICTION':str,'NOTICE':str,'NOTICE_2':str,'NOTICE_3':str,'NOTICE_4':str,'NOTICE_5':str,'TIMING_GROUP_NR':int})
     with open("./dino/service_restriction.din", 'r') as restrictionfile:
         service_restriction = pandas.read_csv(restrictionfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'RESTRICTION':str,'RESTRICT_TEXT1':str,'RESTRICT_TEXT2':str,'RESTRICT_TEXT3':str,'RESTRICT_TEXT4':str,'RESTRICT_TEXT5':str,'RESTRICTION_DAYS':str})
+    with open("./dino/calendar_of_the_company.din", 'r') as calendarfile:
+        calendar_otc = pandas.read_csv(calendarfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'DAY':str,'DAY_TEXT':str,'DAY_TYPE_NR':int})
     with open("./dino/rec_stop.din", 'r') as stopfile:
         rec_stop = pandas.read_csv(stopfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'STOP_TYPE_NR':int,'STOP_NAME':str,'STOP_SHORTNAME':str,'STOP_POS_X':str,'STOP_POS_Y':str,'PLACE':str,'OCC':int,'IFOPT':str}, index_col=1)
     with open("./dino/rec_stop_area.din", 'r') as areafile:
@@ -79,14 +81,14 @@ if __name__ == "__main__":
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
     restrictions = readrestrictions(service_restriction, version)
 
-    today = date.today().timetuple()[:3]
-    ph = (True if input("Ist heute ein Feiertag? (j/*) ") == "j" else False)
+    #today = date.today().timetuple()[:3]
+    today = (2018, 4, 2)
 
     line = Line(version, int(input("Linien-ID: ")), rec_lin_ber, lid_course, lid_travel_time_type, stops)
     print("geladen: ", line)
 
     # temporär, später via Abfahrtsmonitor oderso laden
-    trips = sorted(getlinetrips(line, 0, today, ph, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops), key=lambda x: x.starttime)
+    trips = sorted(getlinetrips(line, 0, today, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops, calendar_otc), key=lambda x: x.starttime)
     for ti, trip in enumerate(trips):
         print(str(ti)+":", trip)
 
