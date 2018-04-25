@@ -36,6 +36,10 @@ class Version():
 class Restriction():
     def __init__(self, restrictionstr, datefrom, dateuntil, text=""):
         self.restrictionstr = restrictionstr
+
+        self.datefrom = datefrom
+        self.dateuntil = dateuntil
+
         self.firstday = int(datefrom[6:8])
         self.firstmonth = int(datefrom[4:6])
         self.startyear = int(datefrom[0:4])
