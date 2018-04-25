@@ -74,15 +74,13 @@ if __name__ == "__main__":
     with open("./dino/rec_lin_ber.din", 'r') as linefile:
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
-    versionid = 12  # HST (DINO_VRR_20180209)
-    # versionid = 14  # NIAG, 929: 25929 (DINO_VRR_20180209)
+    versionid = 11  # HST (DINO_VRR_20180418)
 
     version = Version(set_version.loc[versionid])
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
     restrictions = readrestrictions(service_restriction, version)
 
-    #today = date.today().timetuple()[:3]
-    today = (2018, 4, 2)
+    today = date.today().timetuple()[:3]
 
     line = Line(version, int(input("Linien-ID: ")), rec_lin_ber, lid_course, lid_travel_time_type, stops)
     print("geladen: ", line)
