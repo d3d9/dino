@@ -4,7 +4,7 @@
 from DINO import Version, Line, getlinetrips, readrestrictions, readallstops
 from datetime import date, datetime, timedelta
 from csv import writer
-from sys import stdout
+from sys import stdout, exit
 import pandas
 
 
@@ -99,8 +99,10 @@ if __name__ == "__main__":
 
     inp = "@1"
     currentstopnr = 0
+    message = ""
     newstop = False
     while inp != "e":
+        message = ""
         now = datetime.now()
         currenttime = timedelta(hours=now.hour, minutes=now.minute, seconds=now.second)
         if inp == "a":
@@ -127,10 +129,30 @@ if __name__ == "__main__":
             rtstops[currentstopnr - 1].arrdelaystr = None
             rtstops[currentstopnr - 1].depdelaystr = None
         elif inp.startswith("@"):
-            currentstopnr = int(inp[1:])
+            afterat = inp[1:]
+            if afterat == "+":
+                if currentstopnr < len(rtstops):
+                    currentstopnr += 1
+                else:
+                    message = "Bereits am Fahrtende"
+            elif afterat == "-":
+                if currentstopnr > 1:
+                    currentstopnr -= 1
+                else:
+                    message = "Bereits am Fahrtanfang"
+            else:
+                try:
+                    if (0 < int(afterat) <= len(rtstops)):
+                        currentstopnr = int(afterat)
+                    else:
+                        message = f"Ungültige Haltestellennummer {afterat}"
+                except:
+                    message = "@-Eingabe nicht verstanden. Erwartet wird \"@+\", \"@-\", @{zahl} (z.B. \"@5\")"
             newstop = False
+        elif inp == "qQq":
+            exit(0)
         else:
-            print("Unbekannte Eingabe")
+            message = "Unbekannte Eingabe"
             newstop = False
         if newstop and currentstopnr < len(rtstops):
             currentstopnr += 1
@@ -145,7 +167,8 @@ if __name__ == "__main__":
             print(arrow + "  " + "  " + "{:32}".format("Status: "+nonestr(rtts.status))
                   + "dep " + str(rtts.tripstop.deptime) + " rtdep " + nonestr(rtts.rtdeptime)
                   + " (" + nonestr(rtts.depdelaystr) + ")")
-        print("Eingaben:\na Ankunft\nd Abfahrt\np Vorbeifahrt\nr Reset\n@{nr} Haltenummer ändern\ne Ende")
+        print(message)
+        print("Eingaben:\na Ankunft\nd Abfahrt\np Vorbeifahrt\nr Reset\n@nr, @+, @- Halt ändern\ne Ende\nqQq Ohne Nachricht und Datei beenden")
         inp = input("Eingabe: ")
 
     print("\nBeobachtung beendet.")
@@ -197,7 +220,7 @@ if __name__ == "__main__":
             stoppos = rtts.tripstop.coursestop.stoppos
             print(str(rtts.tripstop.coursestop.stopnr).zfill(2) + ". " + nonestr(rtts.depdelaystr)
                   + " " + nonestr(rtts.status) + " bei " + stoppos.area.stop.name)
-    print("\nQuelle: Verkehrsverbund Rhein-Ruhr/OpenVRR")
+    print("\nOriginaldatenquelle: Verkehrsverbund Rhein-Ruhr/OpenVRR")
     print(f"Fahrplandaten: {version.periodname} ({version.text}) gültig von "
           + f"{version.validfromstr} bis {version.validtostr}")
     print("\nViele Grüße\n")
