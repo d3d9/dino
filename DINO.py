@@ -368,6 +368,8 @@ def dayvalid(r, version, day, calendar_otc, daytype):
     for index, row in calendar_otc.query("VERSION == @version.id & DAY == @daystr").iterrows():
         tripdaytype = row["DAY_TYPE_NR"]
         break
+    else:
+        tripdaytype = 0
     return bool(tripdaytype & daytype) and r.dayresvalid(*day)
 
 
