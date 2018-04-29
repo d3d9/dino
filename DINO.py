@@ -286,7 +286,7 @@ class Course():
     def __str__(self):
         return "Course " + str(self.line.version.id) + ":" + self.line.lineid + ":" + str(self.linedir) + ":" + str(self.variant) \
                 + " from " + self.stopfrom + " to " + self.stopto \
-                + " (" + str(self.distance) + " m)"
+                + " (" + str(len(self.stops)) + " stops, " + str(self.distance) + " m)"
 
     def stoptext(self):
         text = str(self) + "\n"
