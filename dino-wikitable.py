@@ -8,7 +8,10 @@ from datetime import timedelta
 
 
 # todo: ersetzen, es sollte kontext verstehen
-def stopclean(name, placelist):
+def stopclean(name, placelist, ignoreif=["Hauptbahnhof", "Hbf", "Bahnhof", "Bf"]):
+    for s in ignoreif:
+        if s in name:
+            return name
     for place in placelist:
         name = name.replace(place, "", 1)
     return name
@@ -87,8 +90,8 @@ def fahrplanarray(lineids, placelist):
         line = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
         # print(line)
         a_l = [["'''" + line.linesymbol + "'''"], []]
-        for courseid in line.courses:
-            course = line.courses[courseid]
+        for course in sorted(line.courses.values(), key=lambda c: (c.linedir, stopclean(c.stopfrom, placelist), -len(c.stops))):
+            courseid = course.variant
             # print(course)
             a_c = [["'''" + stopclean(course.stopfrom, placelist) + "'''&nbsp;→ '''" + stopclean(course.stopto, placelist) + "'''", len(course.stops), str(round(course.distance/1000, 1)).replace(".", ",").rstrip("0").rstrip(",") + " km"], []]
             fahrzeiten = {}
@@ -128,6 +131,7 @@ def fahrplanarray(lineids, placelist):
                         a_r[1].append([[dttext, takttext], []])
                     a_fz[1].append(a_r)
                 a_c[1].append(a_fz)
+            a_c[1].sort(reverse=True, key=lambda fz: fz[0][0])
             a_l[1].append(a_c)
         a.append(a_l)
     return a
@@ -165,7 +169,7 @@ def linerows(a):
 
 if __name__ == "__main__":
     versionid = 12
-    placelist = ["Hagen ", "HA-"]
+    placelist = ["Hagen ", "HA-", "Hagen, "]
     lineids = []
     onlyew = False
     # printallstops = False
