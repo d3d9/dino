@@ -168,7 +168,7 @@ def linerows(a):
 
 
 if __name__ == "__main__":
-    versionid = 12
+    versionid = 13
     placelist = ["Hagen ", "HA-", "Hagen, "]
     lineids = []
     onlyew = False
