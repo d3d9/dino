@@ -277,7 +277,7 @@ if __name__ == "__main__":
                    )
     linienfirstpre = "align=\"center\" style=\"background-color:#B404AE; color:white;\""
 
-    wikitext = "Diese Tabelle wurde komplett aus DINO-Fahrplandaten vom [[Verkehrsverbund Rhein-Ruhr|VRR]] generiert<ref>https://github.com/d3d9/dino/blob/master/dino-wikitable.py</ref> und ist sehr experimentell. …\n\n"
+    wikitext = "Diese Seite wurde komplett aus DINO-Fahrplandaten vom [[Verkehrsverbund Rhein-Ruhr|VRR]] generiert<ref>https://github.com/d3d9/dino/blob/master/dino-wikitable.py</ref> und ist sehr experimentell. Dargestellt sind Fahrplaninformationen der [[Hagener Straßenbahn AG]].\n\n"
     if printstops:
         wikitext += "{{All Coordinates|pos=inline|section=Haltestellenliste}}\n\n"
     wikitext += "== Busverkehr ==\n=== Liniennetz ===\n==== " + ("Einsatzwagen" if onlyew else "Alles") + " ====\n"
