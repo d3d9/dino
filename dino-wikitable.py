@@ -38,7 +38,7 @@ def daytypetext(dt, days=["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]):
     return (", ".join(tage) if tage else "keine")
 
 
-def takt(a):
+def takt(a, min_alle=3):
     r = []
     nexttime = timedelta(seconds=-9999)
     nexttd = timedelta(seconds=-9999)
@@ -50,17 +50,21 @@ def takt(a):
         if i < len(a) - 1:
             n = a[i+1]
             nexttime = n if type(n) == timedelta else timedelta(seconds=n)
+        else:
+            nexttime = timedelta(seconds=-9999)
         tdiff = nexttime - td
+
         if tdiff == nexttd:
             takt = tdiff
             taktc += 1
         else:
-            if takt:
-                if taktc == 1:
-                    r.append(timestr(int((td-takt).total_seconds())))
-                elif taktc == 2:
-                    r.append(timestr(int((td-takt-takt).total_seconds())))
-                    r.append(timestr(int((td-takt).total_seconds())))
+            if taktc:
+                if not takt:
+                    for _ in range(taktc):
+                        r.append(timestr(int(td.total_seconds())))
+                elif taktc < min_alle:
+                    for t in range(taktc, 0, -1):
+                        r.append(timestr(int((td-t*takt).total_seconds())))
                 else:
                     r.append("alle " + mins(takt) + " min")
             takt = timedelta(0)
@@ -119,7 +123,8 @@ def fahrplanarray(lineids, placelist):
                     elif starttime not in restrictions[restrictiontext][daytype]:
                         restrictions[restrictiontext][daytype].append(starttime)
                     else:
-                        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                        restrictions[restrictiontext][daytype].append(starttime)
+                        print("Warnung, gleichzeitige gleiche Abfahrt:", course, fahrzeit, restrictiontext, daytype, timestr(starttime))
                 for restrictiontext in restrictions:
                     a_r = [[restrictiontext], []]
                     # print("Restriction " + restrictiontext)
@@ -220,7 +225,7 @@ def wikitable(a, ttitle, tref, tcols,
 
 
 if __name__ == "__main__":
-    versionid = 13
+    versionid = 11
     placelist = ["Hagen ", "HA-", "Hagen, "]
     lineids = []
     onlyew = False
