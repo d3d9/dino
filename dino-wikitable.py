@@ -30,7 +30,7 @@ def rowspan(e):
 
 
 # todo: "Mo-Fr" statt "Mo, Di, .." oderso?
-def daytypetext(dt, days=["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]):
+def day_attr_text(dt, days=["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]):
     tage = []
     for i, day in enumerate(bin(dt)[2:].zfill(7)):
         if bool(int(day)):
@@ -111,27 +111,31 @@ def fahrplanarray(lineids, placelist):
                 a_fz = [[fahrzeit], []]
                 restrictions = {}
                 for index, row in rec_trip.query("VERSION == @versionid & LINE_NR == @lineid & STR_LINE_VAR == @courseid & (" + " | ".join(("TIMING_GROUP_NR == " + str(tg)) for tg in fahrzeiten[fahrzeit]) + ")").iterrows():
-                    restrictionid = row["RESTRICTION"].strip()
-                    restrictiontext = allrestrictions[restrictionid][3]
-                    daytype = row["DAY_ATTRIBUTE_NR"]
+                    _restriction = row["RESTRICTION"]
+                    if pandas.isnull(_restriction):
+                        restrictiontext = "keine"
+                    else:
+                        restrictionid = row["RESTRICTION"].strip()
+                        restrictiontext = allrestrictions[restrictionid][3]
+                    day_attr = row["DAY_ATTRIBUTE_NR"]
                     starttime = row["DEPARTURE_TIME"]
                     # todo: auch schauen ob die kalender an sich gleich sind, nicht nur der text!
                     if restrictiontext not in restrictions:
-                        restrictions[restrictiontext] = {daytype: [starttime]}
-                    elif daytype not in restrictions[restrictiontext]:
-                        restrictions[restrictiontext][daytype] = [starttime]
-                    elif starttime not in restrictions[restrictiontext][daytype]:
-                        restrictions[restrictiontext][daytype].append(starttime)
+                        restrictions[restrictiontext] = {day_attr: [starttime]}
+                    elif day_attr not in restrictions[restrictiontext]:
+                        restrictions[restrictiontext][day_attr] = [starttime]
+                    elif starttime not in restrictions[restrictiontext][day_attr]:
+                        restrictions[restrictiontext][day_attr].append(starttime)
                     else:
-                        restrictions[restrictiontext][daytype].append(starttime)
-                        print("Warnung, gleichzeitige gleiche Abfahrt:", course, fahrzeit, restrictiontext, daytype, timestr(starttime))
+                        restrictions[restrictiontext][day_attr].append(starttime)
+                        print("Warnung, gleichzeitige gleiche Abfahrt:", course, fahrzeit, restrictiontext, day_attr, timestr(starttime))
                 for restrictiontext in restrictions:
                     a_r = [[restrictiontext], []]
                     # print("Restriction " + restrictiontext)
-                    for daytype in restrictions[restrictiontext]:
-                        dttext = daytypetext(daytype)
-                        # print("Daytype " + str(daytype) + " (" + dttext + ")")
-                        takttext = takt(sorted(restrictions[restrictiontext][daytype]))
+                    for day_attr in restrictions[restrictiontext]:
+                        dttext = day_attr_text(day_attr)
+                        # print("Day attr " + str(day_attr) + " (" + dttext + ")")
+                        takttext = takt(sorted(restrictions[restrictiontext][day_attr]))
                         # print("Takttext " + takttext)
                         a_r[1].append([[dttext, takttext], []])
                     a_r[1].sort(key=lambda dt: dt[0][0])
@@ -225,7 +229,7 @@ def wikitable(a, ttitle, tref, tcols,
 
 
 if __name__ == "__main__":
-    versionid = 11
+    versionid = 13
     placelist = ["Hagen ", "HA-", "Hagen, "]
     lineids = []
     onlyew = False

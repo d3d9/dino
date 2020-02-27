@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from DINO import Version, Line, getlinetrips, readrestrictions, readallstops, printstops, csvstops
+from DINO import Restriction, Version, Line, dayvalid, getlinetrips, readrestrictions, readallstops, printstops, csvstops
 import pandas
-from datetime import datetime, timedelta
-from csv import writer
+from tqdm import tqdm
+from datetime import timedelta, date
+dwt = __import__("dino-wikitable")
 
-
-def departures():
-    raise NotImplementedError
-
-
-def hms(td):
-    m, s = divmod(td.seconds, 60)
-    h, m = divmod(m, 60)
-    return (h, m, s)
-    
 
 if __name__ == "__main__":
     with open("./dino/set_version.din", 'r') as verfile:
@@ -43,49 +34,65 @@ if __name__ == "__main__":
     with open("./dino/rec_lin_ber.din", 'r') as linefile:
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
-    versionid = 13
-    teststopid = 2216
-    # plat
-    # testdate = (2020, 4, 10)
-    # testtime = (0, 0, 0)
-    # limit = -1
 
+    versionid = 16
     version = Version(set_version.loc[versionid])
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
     restrictions = readrestrictions(service_restriction, version)
 
-    # lineids = set(map(str, rec_lin_ber.query("VERSION == @version.id").index.values))
-    servinglines = {}
-    for index, row in lid_course.query("VERSION == @version.id & STOP_NR == @teststopid").iterrows():
+    lines = {}
+    linekm = {}
+    rdts = {}
+    qdf = rec_trip.query("VERSION == @versionid")
+    for index, row in tqdm(qdf.iterrows(), total=qdf.shape[0]):
         lineid = str(int(row["LINE_NR"]))
-        if lineid not in servinglines:
-            servinglines[lineid] = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+        if lineid not in lines:
+            linekm[lineid] = 0.0
+            lines[lineid] = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
 
-    departures = []
-    for lineid in servinglines:
-        line = servinglines[lineid]
-        print(line)
-        for currdate in (datetime(2020, 2, 20) + timedelta(n) for n in range(100)):
-            datet = currdate.timetuple()[:3]
-            print(currdate, datet)
-            for trip in getlinetrips(line, 0, datet, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops, calendar_otc, day_type_2_day_attribute):
-                for stop in trip.stops:
-                    if stop.coursestop.stopnr != len(trip.stops) \
-                       and stop.coursestop.stoppos.area.stop.stopid == teststopid: # \
-                       # and stop.deptime >= timedelta(hours=testtime[0], minutes=testtime[1], seconds=testtime[2]):
-                        departures.append((datet, stop, trip))
+        day_attr = row["DAY_ATTRIBUTE_NR"]
+        rid = row["RESTRICTION"].strip()
+        if (rid, day_attr) not in rdts:
+            daycount = 0
+            c = Restriction(*restrictions[rid])
+            daydate = date(c.startyear, c.firstmonth, c.firstday)
+            enddate = date(c.endyear, c.lastmonth, c.lastday)
 
-    #departures.sort(key=lambda dep: dep[1].deptime)
-    outcsv = [("date", "pttime", "plat", "linenum", "direction")]
-    outdeplist = []
-    for dep in departures:
-        print(dep[1].deptime, dep[1].coursestop.stoppos.name, dep[2].course.line.linesymbol, dep[2].course.stopto)
-        dt = datetime(*dep[0])
-        dt += dep[1].deptime
-        outdeplist.append((dt, (dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S"), dep[1].coursestop.stoppos.name, dep[2].course.line.linesymbol, dep[2].course.stopto)))
+            while daydate <= enddate:
+                if dayvalid(c, version, daydate.timetuple()[:3], calendar_otc, day_attr, day_type_2_day_attribute):
+                    daycount += 1
+                daydate += timedelta(days=1)
 
-    outdeplist.sort(key=lambda _: _[0])
-    for dt, row in sorted(outdeplist, key=lambda _: _[0]):
-        outcsv.append(row)
-    with open("./csv/test-full-csv-feuerwache.csv", "w", encoding="utf-8", newline="\n") as f:
-        writer(f, delimiter=";").writerows(outcsv)
+            rdts[(rid, day_attr)] = daycount
+
+        distance = lines[lineid].courses[int(row["STR_LINE_VAR"])].distance
+        linekm[lineid] += distance*rdts[(rid, day_attr)]
+            
+
+    '''
+    for lineid in lines:
+        line = lines[lineid]
+        print("\n- "+str(line))
+        for courseid in line.courses:
+            course = line.courses[courseid]
+            print("\n-- "+str(course))
+            querystring = "VERSION == @line.version.id & LINE_NR == @line.lineid & STR_LINE_VAR == @courseid"
+            trips = dict((date, list()) for date in dates)
+            for index, row in rec_trip.query(querystring).iterrows():
+                rrow = row["RESTRICTION"]
+                restriction = Restriction(*restrictions[line.version.id][rrow.strip()]) if rrow else None
+                day_attr = row["DAY_ATTRIBUTE_NR"]
+                starttime = timedelta(seconds=row["DEPARTURE_TIME"])
+                for cdate in dates:
+                    # print(cdate)
+                    if dayvalid(restriction, line.version, cdate, calendar_otc, day_attr, day_type_2_day_attribute):
+                        # print(f"valid trip: da {day_attr}, st {starttime}")
+                        trips[cdate].append(starttime)
+                    else:
+                        # print(f"invalid trip: da {day_attr}, st {starttime}")
+                        pass
+            for cdate in dates:
+                dts = len(trips[cdate])
+                print(f"--- {cdate[2]}.{cdate[1]}.: {dts} deps ({dwt.takt(sorted(trips[cdate]))})")
+                print(f"--~> {round((dts*course.distance)/1000, 1)} km")
+    '''

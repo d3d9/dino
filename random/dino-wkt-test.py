@@ -2,20 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from DINO import Version, Line, getlinetrips, readrestrictions, readallstops, printstops, csvstops
-import pandas
-from datetime import datetime, timedelta
 from csv import writer
+from datetime import datetime
+import pandas
 
-
-def departures():
-    raise NotImplementedError
-
-
-def hms(td):
-    m, s = divmod(td.seconds, 60)
-    h, m = divmod(m, 60)
-    return (h, m, s)
-    
 
 if __name__ == "__main__":
     with open("./dino/set_version.din", 'r') as verfile:
@@ -43,49 +33,83 @@ if __name__ == "__main__":
     with open("./dino/rec_lin_ber.din", 'r') as linefile:
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
-    versionid = 13
-    teststopid = 2216
-    # plat
-    # testdate = (2020, 4, 10)
-    # testtime = (0, 0, 0)
-    # limit = -1
+    # !!!!!
+    versionid = 22
 
     version = Version(set_version.loc[versionid])
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
     restrictions = readrestrictions(service_restriction, version)
 
-    # lineids = set(map(str, rec_lin_ber.query("VERSION == @version.id").index.values))
-    servinglines = {}
-    for index, row in lid_course.query("VERSION == @version.id & STOP_NR == @teststopid").iterrows():
-        lineid = str(int(row["LINE_NR"]))
-        if lineid not in servinglines:
-            servinglines[lineid] = Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+    # !!!!!
 
-    departures = []
-    for lineid in servinglines:
-        line = servinglines[lineid]
-        print(line)
-        for currdate in (datetime(2020, 2, 20) + timedelta(n) for n in range(100)):
-            datet = currdate.timetuple()[:3]
-            print(currdate, datet)
-            for trip in getlinetrips(line, 0, datet, (0, 0, 0), -1, restrictions, rec_trip, lid_course, lid_travel_time_type, stops, calendar_otc, day_type_2_day_attribute):
-                for stop in trip.stops:
-                    if stop.coursestop.stopnr != len(trip.stops) \
-                       and stop.coursestop.stoppos.area.stop.stopid == teststopid: # \
-                       # and stop.deptime >= timedelta(hours=testtime[0], minutes=testtime[1], seconds=testtime[2]):
-                        departures.append((datet, stop, trip))
+    lineids_hstne10 = {50901, 50902, 50903, 50904, 50905, 50906, 50907, 50908,
+                       50910, 50911, 50912, 50919, 50921, 50922, 50931, 50932}
+    lineids_hst544n = {50544}
+                       
+    lineids_bvr591n = {88591, 88909}
+    
+    lineids_ver511n = {45511}
+                     
+    lineids_hstne11 = {50901, 50902, 50903, 50904, 50905, 50906, 50907,
+                       50919, 50922, 50931, 50932}
 
-    #departures.sort(key=lambda dep: dep[1].deptime)
-    outcsv = [("date", "pttime", "plat", "linenum", "direction")]
-    outdeplist = []
-    for dep in departures:
-        print(dep[1].deptime, dep[1].coursestop.stoppos.name, dep[2].course.line.linesymbol, dep[2].course.stopto)
-        dt = datetime(*dep[0])
-        dt += dep[1].deptime
-        outdeplist.append((dt, (dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S"), dep[1].coursestop.stoppos.name, dep[2].course.line.linesymbol, dep[2].course.stopto)))
+    lineids_hst = set(rec_lin_ber.query("VERSION == @version.id").index.values)
 
-    outdeplist.sort(key=lambda _: _[0])
-    for dt, row in sorted(outdeplist, key=lambda _: _[0]):
-        outcsv.append(row)
-    with open("./csv/test-full-csv-feuerwache.csv", "w", encoding="utf-8", newline="\n") as f:
-        writer(f, delimiter=";").writerows(outcsv)
+    # !!!!!
+    lineids = lineids_ver511n
+
+    lines = {lineid: Line(version, lineid, rec_lin_ber, lid_course, lid_travel_time_type, stops)
+                     for lineid in lineids}
+    
+    direction = 0
+    
+    # !!!!!
+    # testdate = (2019,6,5)
+    testdate = (2019,6,12)
+    
+    testdatetime = datetime(*testdate)
+    ph = False  # ...
+    testtime = (0,0,0)
+    limit = -1
+    
+    m = 0.000001
+    
+    trips = {lineid: getlinetrips(line, direction, testdate, testtime, limit,
+                                  restrictions, rec_trip, lid_course,
+                                  lid_travel_time_type, stops, calendar_otc,
+                                  day_type_2_day_attribute) for lineid, line in lines.items()}
+    
+    # print("\n\n".join((str(lines[lineid])+"\n"+("\n".join(trip.stoptext() for trip in trips[lineid]))) for lineid in lines))
+    
+    with open("./csv/testwkt.csv", 'w') as cf:
+        w = writer(cf, delimiter=";", lineterminator='\n')
+        w.writerow(["lineid", "linedir", "variant", "timinggroup", "day_attr", "restrictionstr", "linesymbol", "from", "to", "startt", "endt", "ids", "wkt"])
+        for trip in (trip for triplist in trips.values() for trip in triplist):
+            _row = list(map(str, [trip.course.line.lineid, trip.course.linedir, trip.course.variant,
+                                  trip.timing_group_nr, trip.day_attr, (trip.restriction.restrictionstr if trip.restriction else ""),  # tmp..
+                                  trip.course.line.linesymbol, trip.course.stopfrom, trip.course.stopto,
+                                  int((testdatetime + trip.starttime).timestamp()),
+                                  int((testdatetime + trip.endtime).timestamp())]))
+            _row.append("|".join(_row[:6]))
+            _wkt = "LINESTRING M ("
+            _xym = ""
+            for tripstop in trip.stops:
+                _s = tripstop.coursestop.stoppos
+                if _s.pos_x is None or _s.pos_y is None: continue
+                _xym += f"{round(float(_s.pos_x)*m, 6)} {round(float(_s.pos_y)*m, 6)} {int((testdatetime + (tripstop.deptime or tripstop.arrtime)).timestamp())}, "
+            _wkt += _xym[:-2] + ")"
+            _row.append(_wkt)
+            w.writerow(_row)
+            '''
+            for tripstop in trip.stops:
+                _c = tripstop.coursestop
+                writer.writerow(_row + [_c.stopnr,
+                                        _c.stoppos.area.stop.name,
+                                        _c.stoppos.ifopt,
+                                        ...,
+                                        testdatetime + tripstop.arrtime,
+                                        testdatetime + tripstop.deptime])
+            '''
+    
+    #'''
+

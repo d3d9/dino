@@ -1,6 +1,10 @@
 # dino
 Verschiedenes mit DINO-Daten, weitere Details kommen noch
 
+### random/
+
+(wie alles) undokumentierte Skripte aus der letzten Zeit, muss noch irgendwie geordnet werden..
+
 ### dino/
 Hierhin kommen die .din-Dateien, siehe z.B. https://www.openvrr.de/dataset/dino-daten.
 

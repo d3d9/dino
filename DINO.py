@@ -297,13 +297,13 @@ class Course():
 
 
 class Trip():
-    def __init__(self, course, restriction, daytype, starttime, timing_group_nr, stops):
+    def __init__(self, course, restriction, day_attr, starttime, timing_group_nr, stops):
         self.course = course
         self.restriction = restriction
         # NOTICE ?
         # TRIP_ID ?
         # VEH_TYPE_NR ?
-        self.daytype = daytype
+        self.day_attr = day_attr
         self.timing_group_nr = timing_group_nr
         self.starttime = starttime
         self.stops = stops
@@ -316,8 +316,8 @@ class Trip():
         # kriegt man als stunde auch 24, 25 usw., mit str(timedelta(..)) kriegt man "1 day, .."
         return "Trip " + str(self.course.line.version.id) + ":" + self.course.line.lineid + ":" + str(self.course.linedir) + ":" + str(self.course.variant) \
                 + " at " + str(self.starttime) + " from " + self.course.stopfrom + " to " + self.course.stopto \
-                + " (" + str(self.duration) + "), restriction \"" + self.restriction.text \
-                + "\", daytype " + str(self.daytype)
+                + " (" + str(self.duration) + "), restriction \"" + (self.restriction.text if self.restriction else "None") \
+                + "\", day attr " + str(self.day_attr)
 
     def stoptext(self):
         text = str(self) + "\n"
@@ -363,14 +363,14 @@ def daysin(month, year):
     return days
 
 
-def dayvalid(r, version, day, calendar_otc, daytype):
+def dayvalid(r, version, day, calendar_otc, day_attr, day_type_2_day_attribute):
     daystr = str(day[0]) + str(day[1]).zfill(2) + str(day[2]).zfill(2)
     for index, row in calendar_otc.query("VERSION == @version.id & DAY == @daystr").iterrows():
-        tripdaytype = row["DAY_TYPE_NR"]
+        day_type = row["DAY_TYPE_NR"]
         break
-    else:
-        tripdaytype = 0
-    return bool(tripdaytype & daytype) and r.dayresvalid(*day)
+    for index, row in day_type_2_day_attribute.query("VERSION == @version.id & DAY_TYPE_NR == @day_type & DAY_ATTRIBUTE_NR == @day_attr").iterrows():
+        return r.dayresvalid(*day) if r else True
+    return False
 
 
 def findlinesymbol(rec_lin_ber, version, lineid):
@@ -430,7 +430,7 @@ def getlinecourses(line, rec_lin_ber, lid_course, lid_travel_time_type, stops):
 
 
 def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
-                 lid_course, lid_travel_time_type, stops, calendar_otc):
+                 lid_course, lid_travel_time_type, stops, calendar_otc, day_type_2_day_attribute):
     timeseconds = fromtime[0]*60*60 + fromtime[1]*60 + fromtime[2]
     querystring = "VERSION == @line.version.id & LINE_NR == @line.lineid & DEPARTURE_TIME >= @timeseconds"
     # hoffentlich gibt es keine echte LINE_DIR_NR=0
@@ -444,9 +444,10 @@ def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
         else:
             limit -= 1
 
-        restriction = Restriction(*restrictions[row["RESTRICTION"].strip()])
-        daytype = row["DAY_ATTRIBUTE_NR"]
-        if dayvalid(restriction, line.version, day, calendar_otc, daytype):
+        _r = nullorstrip(row["RESTRICTION"])
+        restriction = Restriction(*restrictions[_r]) if _r else None
+        day_attr = row["DAY_ATTRIBUTE_NR"]
+        if dayvalid(restriction, line.version, day, calendar_otc, day_attr, day_type_2_day_attribute):
             course = line.courses[row["STR_LINE_VAR"]]
             starttime = timedelta(seconds=row["DEPARTURE_TIME"])
             timing_group_nr = row["TIMING_GROUP_NR"]
@@ -456,7 +457,7 @@ def getlinetrips(line, direction, day, fromtime, limit, restrictions, rec_trip,
                 arrtime, deptime = course.timing_groups[timing_group_nr][coursestop.stopnr]
                 tripstops.append(TripStop(coursestop, starttime + arrtime, starttime + deptime))
 
-            trips.append(Trip(course, restriction, daytype, starttime, timing_group_nr, tripstops))
+            trips.append(Trip(course, restriction, day_attr, starttime, timing_group_nr, tripstops))
 
     return trips
 

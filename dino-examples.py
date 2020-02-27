@@ -14,6 +14,8 @@ if __name__ == "__main__":
         service_restriction = pandas.read_csv(restrictionfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'RESTRICTION':str,'RESTRICT_TEXT1':str,'RESTRICT_TEXT2':str,'RESTRICT_TEXT3':str,'RESTRICT_TEXT4':str,'RESTRICT_TEXT5':str,'RESTRICTION_DAYS':str})
     with open("./dino/calendar_of_the_company.din", 'r') as calendarfile:
         calendar_otc = pandas.read_csv(calendarfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'DAY':str,'DAY_TEXT':str,'DAY_TYPE_NR':int})
+    with open("./dino/day_type_2_day_attribute.din", 'r') as dt2dafile:
+        day_type_2_day_attribute = pandas.read_csv(dt2dafile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'DAY_TYPE_NR':int,'DAY_ATTRIBUTE_NR':int})
     with open("./dino/rec_stop.din", 'r') as stopfile:
         rec_stop = pandas.read_csv(stopfile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'STOP_NR':int,'STOP_TYPE_NR':int,'STOP_NAME':str,'STOP_SHORTNAME':str,'STOP_POS_X':str,'STOP_POS_Y':str,'PLACE':str,'OCC':int,'IFOPT':str}, index_col=1)
     with open("./dino/rec_stop_area.din", 'r') as areafile:
@@ -29,7 +31,7 @@ if __name__ == "__main__":
     with open("./dino/rec_lin_ber.din", 'r') as linefile:
         rec_lin_ber = pandas.read_csv(linefile, skipinitialspace=True, sep=';', dtype={'VERSION':int,'LINE_NR':int,'STR_LINE_VAR':int,'LINE_DIR_NR':int,'LINE_NAME':str}, index_col=3)
 
-    versionid = 12  # HST (DINO_VRR_20180209)
+    versionid = 13
 
     version = Version(set_version.loc[versionid])
     stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
@@ -63,7 +65,7 @@ if __name__ == "__main__":
     #'''
     lineid = 50514
     direction = 0
-    testdate = (2018,2,23)
+    testdate = (2020,2,23)
     ph = False
     testtime = (18,50,0)
     limit = -1
@@ -72,6 +74,6 @@ if __name__ == "__main__":
     restrictions = readrestrictions(service_restriction, version)
     print("\n".join([trip.stoptext() for trip in getlinetrips(line, direction, testdate, testtime, limit,
                                                              restrictions, rec_trip, lid_course,
-                                                             lid_travel_time_type, stops, calendar_otc)]))
+                                                             lid_travel_time_type, stops, calendar_otc, day_type_2_day_attribute)]))
     #'''
 

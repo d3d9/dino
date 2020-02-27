@@ -36,18 +36,18 @@ if __name__ == "__main__":
     #stops = readallstops(version, rec_stop, rec_stop_area, rec_stopping_points)
     restrictions = readrestrictions(service_restriction, version)
 
-    #daytype = 124
+    #day_attr = 124
     #rid = "#0029"
     #c = Restriction(*restrictions[rid])
 
     #  8;d5   (DINO_VRR_20180209)
-    #daytype = 119
+    #day_attr = 119
     #rid = "test"
     #c = Restriction("060c182000c1830640c183062c183060230e0d183060c1830c1830604183060c183060c1460c183220c1830658b060c102040818",
     #                "20180107", "20190105",
     #                "nur samstags, auch 12.1.18, 19.1., 26.1., 2.2., 9.2., 16.2.,;23.2., 2.3., 9.3., 16.3., 23.3., 6.4., 13.4., 20.4., 27.4., ;30.4., 4.5., 9.5., 11.5., 18.5., 20.5., 25.5., 30.5., 1.6., ;8.6., 15.6., 22.6., 29.6., 6.7., 13.7., 20.7., 27.7., 3.8., ;10.8., 17.8., 24.8., 31.8., 7.9., 14.9., 21.9., 28.9., 2.10 ;")
 
-    #daytype = 1
+    #day_attr = 1
     #rid = "hst18" # DINO_VRR_20180418
     #c = ("00000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000",
     #     "20170611", "20180609",
@@ -68,12 +68,12 @@ if __name__ == "__main__":
         print("")
         #'''
         for index, row in rec_trip.query("VERSION == @version.id & RESTRICTION == @rid").iterrows():
-            daytype = row["DAY_ATTRIBUTE_NR"]
-            sid = str(versionid) + "-" + rid + "-" + str(daytype)
+            day_attr = row["DAY_ATTRIBUTE_NR"]
+            sid = str(versionid) + "-" + rid + "-" + str(day_attr)
             if sid in crows:
                 continue
-            daytypebits = bin(daytype)[2:].zfill(7)
-            crows[sid] = sid + "," + ",".join(x for x in daytypebits) + "," + c.datefrom + "," + c.dateuntil
+            day_attr_bits = bin(day_attr)[2:].zfill(7)
+            crows[sid] = sid + "," + ",".join(x for x in day_attr_bits) + "," + c.datefrom + "," + c.dateuntil
 
             daydate = date(c.startyear, c.firstmonth, c.firstday)
             enddate = date(c.endyear, c.lastmonth, c.lastday)
@@ -85,16 +85,16 @@ if __name__ == "__main__":
 
                 #print(daydate, weekday, daystr)
 
-                daytypevalid = bool(int(daytypebits[weekday]))
+                day_attr_valid = bool(int(day_attr_bits[weekday]))
                 restrictionvalid = bc[daydate.year][daydate.month][daydate.day-1]
 
-                if daytypevalid and restrictionvalid:
+                if day_attr_valid and restrictionvalid:
                     #print("ok")
                     exception_type = 0
-                elif daytypevalid and not restrictionvalid:
+                elif day_attr_valid and not restrictionvalid:
                     #print("e: 2 (removed)")
                     exception_type = 2
-                elif (not daytypevalid) and restrictionvalid:
+                elif (not day_attr_valid) and restrictionvalid:
                     # ???
                     #print("grrgrgrgrgrgr")
                     #exception_type = 1
