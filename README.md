@@ -1,5 +1,7 @@
 # dino
-Verschiedenes mit DINO-Daten, weitere Details kommen noch
+Verschiedenes mit DINO-Daten, ~~weitere Details kommen noch~~
+
+Eine deutlich bessere, SQLAlchemy-basierte ORM-Bibliothek für DINO-Daten der Version 2.1 wird gerade erstellt und wird unter <https://github.com/d3d9/DINO2> zu finden sein.
 
 ### random/
 
